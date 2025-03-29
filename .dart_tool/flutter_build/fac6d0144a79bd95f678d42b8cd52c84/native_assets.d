@@ -1,1 +1,0 @@
- C:\\Users\\pc\\AndroidStudioProjects\\AquaGo\\.dart_tool\\flutter_build\\fac6d0144a79bd95f678d42b8cd52c84\\native_assets.yaml: 
