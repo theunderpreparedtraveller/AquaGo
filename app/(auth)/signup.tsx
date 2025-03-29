@@ -1,13 +1,22 @@
 import { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, TextInput, Text, TouchableOpacity, ScrollView } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
-import { supabase } from '../../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.EXPO_PUBLIC_SUPABASE_URL!,
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function SignUp() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
 
@@ -21,93 +30,94 @@ export default function SignUp() {
     return null;
   }
 
+  const validateForm = () => {
+    if (!email || !password || !name || !phone || !address) {
+      setError('All fields are required');
+      return false;
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters');
+      return false;
+    }
+    if (!email.includes('@')) {
+      setError('Please enter a valid email address');
+      return false;
+    }
+    return true;
+  };
+
   const handleSignUp = async () => {
     try {
-      // Validate input fields
-      if (!email || !password || !name) {
-        const errorMsg = 'Please fill in all fields';
-        console.error('[Signup Error]:', errorMsg);
-        setError(errorMsg);
+      setError('');
+      setLoading(true);
+
+      if (!validateForm()) {
+        setLoading(false);
         return;
       }
 
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
-        const errorMsg = 'Please enter a valid email address';
-        console.error('[Signup Error]:', errorMsg);
-        setError(errorMsg);
-        return;
-      }
-
-      // Validate password strength
-      if (password.length < 6) {
-        const errorMsg = 'Password must be at least 6 characters long';
-        console.error('[Signup Error]:', errorMsg);
-        setError(errorMsg);
-        return;
-      }
-
-      console.log('[Signup Process]:', 'Starting signup for email:', email);
-
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      // 1. Create auth user
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
       });
 
-      if (signUpError) {
-        console.error('[Signup Error]:', signUpError.message);
-        setError(signUpError.message);
-        return;
-      }
+      if (signUpError) throw signUpError;
+      if (!authData.user) throw new Error('Signup failed - no user returned');
 
-      if (signUpData?.user) {
-        console.log('[Signup Success]:', 'User created successfully', {
-          userId: signUpData.user.id,
-          email: signUpData.user.email
-        });
+      // 2. Create profile record
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: authData.user.id,
+            email,
+            name,
+            phone,
+            address,
+          }
+        ]);
 
-        // Create profile
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([
-            {
-              id: signUpData.user.id,
-              email: email,
-              name: name,
-            },
-          ]);
+      if (profileError) throw profileError;
 
-        if (profileError) {
-          console.error('[Profile Creation Error]:', profileError.message);
-          setError('Account created but profile setup failed. Please contact support.');
-          return;
-        }
-
-        console.log('[Profile Creation Success]:', 'User profile created successfully');
-        router.replace('/(tabs)');
-      }
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred';
-      console.error('[Signup Error]:', errorMsg);
-      setError(errorMsg);
+      // Explicitly navigate to the home page after successful signup
+      router.replace('/(tabs)');
+      
+    } catch (error: any) {
+      console.error('Signup error:', error.message);
+      setError(error.message || 'An error occurred during signup');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.contentContainer}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.formContainer}>
+        <Text style={styles.logo}>AquaGo</Text>
         <Text style={styles.title}>Create Account</Text>
         
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-        
+        {error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : null}
+
         <TextInput
           style={styles.input}
           placeholder="Full Name"
           placeholderTextColor="#666"
           value={name}
-          onChangeText={setName}
+          onChangeText={(text) => {
+            setName(text);
+            setError('');
+          }}
           autoCapitalize="words"
+          editable={!loading}
         />
 
         <TextInput
@@ -115,9 +125,41 @@ export default function SignUp() {
           placeholder="Email"
           placeholderTextColor="#666"
           value={email}
-          onChangeText={setEmail}
+          onChangeText={(text) => {
+            setEmail(text.trim());
+            setError('');
+          }}
           keyboardType="email-address"
           autoCapitalize="none"
+          autoComplete="email"
+          editable={!loading}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Phone Number"
+          placeholderTextColor="#666"
+          value={phone}
+          onChangeText={(text) => {
+            setPhone(text.trim());
+            setError('');
+          }}
+          keyboardType="phone-pad"
+          editable={!loading}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder="Address"
+          placeholderTextColor="#666"
+          value={address}
+          onChangeText={(text) => {
+            setAddress(text);
+            setError('');
+          }}
+          multiline
+          numberOfLines={2}
+          editable={!loading}
         />
         
         <TextInput
@@ -125,12 +167,23 @@ export default function SignUp() {
           placeholder="Password"
           placeholderTextColor="#666"
           value={password}
-          onChangeText={setPassword}
+          onChangeText={(text) => {
+            setPassword(text);
+            setError('');
+          }}
           secureTextEntry
+          autoComplete="new-password"
+          editable={!loading}
         />
 
-        <TouchableOpacity style={styles.signupButton} onPress={handleSignUp}>
-          <Text style={styles.signupButtonText}>SIGN UP</Text>
+        <TouchableOpacity 
+          style={[styles.signupButton, loading && styles.disabledButton]} 
+          onPress={handleSignUp}
+          disabled={loading}
+        >
+          <Text style={styles.signupButtonText}>
+            {loading ? 'CREATING ACCOUNT...' : 'SIGN UP'}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.loginContainer}>
@@ -142,7 +195,7 @@ export default function SignUp() {
           </Link>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -150,28 +203,43 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1f2b',
-    padding: 20,
+  },
+  contentContainer: {
+    flexGrow: 1,
     justifyContent: 'center',
+    padding: 20,
   },
   formContainer: {
     width: '100%',
     maxWidth: 400,
     alignSelf: 'center',
   },
-  title: {
-    fontFamily: 'Montserrat-SemiBold',
-    fontSize: 32,
+  logo: {
+    fontSize: 24,
+    fontFamily: 'Montserrat-Light',
     color: '#FFFFFF',
     marginBottom: 30,
   },
+  title: {
+    fontFamily: 'Montserrat-SemiBold',
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 30,
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+    padding: 15,
+    borderRadius: 8,
+    marginBottom: 15,
+  },
   errorText: {
     color: '#FF3B30',
-    fontFamily: 'Montserrat-Regular',
-    marginBottom: 15,
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 14,
     textAlign: 'center',
   },
   input: {
-    backgroundColor: '#2C2C2E',
+    backgroundColor: '#242430',
     borderRadius: 8,
     padding: 15,
     marginBottom: 15,
@@ -184,6 +252,9 @@ const styles = StyleSheet.create({
     padding: 15,
     alignItems: 'center',
     marginTop: 10,
+  },
+  disabledButton: {
+    opacity: 0.7,
   },
   signupButtonText: {
     color: '#000000',

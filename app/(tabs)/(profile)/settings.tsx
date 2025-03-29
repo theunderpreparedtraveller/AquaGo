@@ -1,78 +1,15 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Switch, Platform, StatusBar } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Switch } from 'react-native';
 import { Bell, Shield, Moon, CircleHelp as HelpCircle } from 'lucide-react-native';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
 import { useTheme } from '../../../context/ThemeContext';
-import { useState, useEffect } from 'react';
-import * as Notifications from 'expo-notifications';
-
-// Get status bar height
-const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
 
 export default function Settings() {
   const { isDarkMode, toggleTheme } = useTheme();
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  
   const [fontsLoaded] = useFonts({
     'Montserrat-Regular': Montserrat_400Regular,
     'Montserrat-Medium': Montserrat_500Medium,
     'Montserrat-SemiBold': Montserrat_600SemiBold,
   });
-
-  useEffect(() => {
-    checkNotificationPermissions();
-  }, []);
-
-  const checkNotificationPermissions = async () => {
-    if (Platform.OS === 'web') {
-      console.log('[Notifications]: Web platform - notifications not supported');
-      return;
-    }
-
-    try {
-      const { status: existingStatus } = await Notifications.getPermissionsAsync();
-      console.log('[Notifications]: Current permission status:', existingStatus);
-      setNotificationsEnabled(existingStatus === 'granted');
-    } catch (error) {
-      console.error('[Notifications Error]:', error);
-    }
-  };
-
-  const handleNotificationsToggle = async (value: boolean) => {
-    if (Platform.OS === 'web') {
-      console.log('[Notifications]: Web platform - notifications not supported');
-      return;
-    }
-
-    try {
-      if (value) {
-        console.log('[Notifications]: Requesting permissions...');
-        const { status } = await Notifications.requestPermissionsAsync();
-        console.log('[Notifications]: Permission request result:', status);
-        
-        if (status === 'granted') {
-          console.log('[Notifications]: Permission granted');
-          setNotificationsEnabled(true);
-          
-          // Configure notifications
-          await Notifications.setNotificationChannelAsync('default', {
-            name: 'default',
-            importance: Notifications.AndroidImportance.MAX,
-            vibrationPattern: [0, 250, 250, 250],
-            lightColor: '#FFA500',
-          });
-        } else {
-          console.log('[Notifications]: Permission denied');
-          setNotificationsEnabled(false);
-        }
-      } else {
-        console.log('[Notifications]: Disabling notifications');
-        setNotificationsEnabled(false);
-      }
-    } catch (error) {
-      console.error('[Notifications Error]:', error);
-      setNotificationsEnabled(false);
-    }
-  };
 
   if (!fontsLoaded) {
     return null;
@@ -86,8 +23,7 @@ export default function Settings() {
           icon: Bell,
           label: 'Notifications',
           type: 'switch',
-          value: notificationsEnabled,
-          onValueChange: handleNotificationsToggle,
+          value: true,
         },
         {
           icon: Moon,
@@ -121,23 +57,21 @@ export default function Settings() {
   ];
 
   return (
-    <ScrollView style={[styles.container, { backgroundColor: isDarkMode ? '#1a1f2b' : '#f5f5f5' }]}>
+    <ScrollView style={styles.container}>
       {sections.map((section, sectionIndex) => (
-        <View key={sectionIndex} style={[styles.section, { borderBottomColor: isDarkMode ? '#2C2C2E' : '#E5E5E5' }]}>
-          <Text style={[styles.sectionTitle, { color: '#FFA500' }]}>{section.title}</Text>
+        <View key={sectionIndex} style={styles.section}>
+          <Text style={styles.sectionTitle}>{section.title}</Text>
           {section.items.map((item, itemIndex) => (
             <TouchableOpacity
               key={itemIndex}
-              style={[styles.settingItem, { backgroundColor: isDarkMode ? '#242430' : '#FFFFFF' }]}
+              style={styles.settingItem}
               disabled={item.type === 'switch'}
             >
               <View style={styles.settingLeft}>
                 <View style={styles.iconContainer}>
                   <item.icon size={24} color="#FFA500" />
                 </View>
-                <Text style={[styles.settingLabel, { color: isDarkMode ? '#FFFFFF' : '#000000' }]}>
-                  {item.label}
-                </Text>
+                <Text style={styles.settingLabel}>{item.label}</Text>
               </View>
               {item.type === 'switch' ? (
                 <Switch
@@ -155,7 +89,7 @@ export default function Settings() {
       ))}
 
       <View style={styles.footer}>
-        <Text style={[styles.version, { color: isDarkMode ? '#666' : '#999' }]}>Version 1.0.0</Text>
+        <Text style={styles.version}>Version 1.0.0</Text>
       </View>
     </ScrollView>
   );
@@ -164,14 +98,16 @@ export default function Settings() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingTop: STATUSBAR_HEIGHT + 20,
+    backgroundColor: '#1a1f2b',
   },
   section: {
     padding: 20,
     borderBottomWidth: 1,
+    borderBottomColor: '#2C2C2E',
   },
   sectionTitle: {
     fontSize: 18,
+    color: '#FFA500',
     fontFamily: 'Montserrat-SemiBold',
     marginBottom: 15,
   },
@@ -179,6 +115,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    backgroundColor: '#242430',
     padding: 15,
     borderRadius: 12,
     marginBottom: 10,
@@ -198,6 +135,7 @@ const styles = StyleSheet.create({
   },
   settingLabel: {
     fontSize: 16,
+    color: '#FFFFFF',
     fontFamily: 'Montserrat-Medium',
   },
   linkText: {
@@ -211,6 +149,7 @@ const styles = StyleSheet.create({
   },
   version: {
     fontSize: 14,
+    color: '#666',
     fontFamily: 'Montserrat-Regular',
   },
 });

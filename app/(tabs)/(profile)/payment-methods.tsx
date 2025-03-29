@@ -1,9 +1,6 @@
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Platform, StatusBar } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { CreditCard, Plus } from 'lucide-react-native';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
-
-// Get status bar height
-const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
 
 export default function PaymentMethods() {
   const [fontsLoaded] = useFonts({
@@ -73,8 +70,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1f2b',
-    paddingTop: STATUSBAR_HEIGHT + 20,
-    paddingHorizontal: 20,
+    padding: 20,
   },
   addButton: {
     flexDirection: 'row',

@@ -1,84 +1,37 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { 
-  StyleSheet, 
-  View, 
-  Text, 
-  TextInput, 
-  ScrollView, 
-  TouchableOpacity, 
-  Dimensions, 
-  Platform,
-  BackHandler,
-} from 'react-native';
+import { useEffect, useState, useRef } from 'react';
+import { StyleSheet, View, Text, TextInput, ScrollView, TouchableOpacity, Dimensions, Platform } from 'react-native';
 import * as Location from 'expo-location';
-import { Search, MapPin, Sun, Moon, User, Truck } from 'lucide-react-native';
+import { Search, MapPin, Sun, Moon, User } from 'lucide-react-native';
 import { useFonts, Montserrat_300Light, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
 import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../context/AuthContext';
 import ProfileMenu from '../../components/ProfileMenu';
-import SearchOverlay from '../../components/SearchOverlay';
 
 const { height } = Dimensions.get('window');
 
 const MapView = Platform.select({
   web: () => {
-    return function WebMap({ style, currentLocation, selectedLocation }) {
-      const [mapUrl, setMapUrl] = useState('https://www.openstreetmap.org/export/embed.html?bbox=77.5746,12.9516,77.6146,12.9916&amp;layer=mapnik');
-
-      useEffect(() => {
-        if (selectedLocation) {
-          const { latitude, longitude } = selectedLocation;
-          setMapUrl(`https://www.openstreetmap.org/export/embed.html?bbox=${longitude-0.02},${latitude-0.02},${longitude+0.02},${latitude+0.02}&amp;layer=mapnik`);
-        } else if (currentLocation) {
-          const { latitude, longitude } = currentLocation.coords;
-          setMapUrl(`https://www.openstreetmap.org/export/embed.html?bbox=${longitude-0.02},${latitude-0.02},${longitude+0.02},${latitude+0.02}&amp;layer=mapnik`);
-        }
-      }, [currentLocation, selectedLocation]);
-
+    return function WebMap({ style, children }) {
       return (
-        <View style={[style, { overflow: 'hidden' }]}>
-          <iframe
-            title="location-map"
-            src={mapUrl}
-            style={{
-              border: 0,
-              height: '100%',
-              width: '100%',
-            }}
-          />
-        </View>
+        <div style={{ 
+          position: 'relative', 
+          width: '100%', 
+          height: '100%',
+          backgroundColor: '#f0f0f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          ...style 
+        }}>
+          <Text>Map View</Text>
+          {children}
+        </div>
       );
     };
   },
   default: () => {
     try {
-      const Map = require('react-native-maps').default;
-      return function NativeMap({ style, currentLocation, selectedLocation }) {
-        if (!Map) return null;
-        
-        const region = selectedLocation ? {
-          latitude: selectedLocation.latitude,
-          longitude: selectedLocation.longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        } : currentLocation ? {
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        } : {
-          latitude: 12.9716,
-          longitude: 77.5946,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        };
-        
-        return (
-          <Map
-            style={style}
-            region={region}
-          />
-        );
-      };
+      return require('react-native-maps').default;
     } catch (e) {
       return function FallbackMap() {
         return (
@@ -93,13 +46,11 @@ const MapView = Platform.select({
 
 export default function Home() {
   const { isDarkMode, toggleTheme } = useTheme();
+  const { userEmail } = useAuth();
   const [location, setLocation] = useState(null);
-  const [selectedLocation, setSelectedLocation] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
-  const [showSearchOverlay, setShowSearchOverlay] = useState(false);
   const mapRef = useRef(null);
-
   const [suppliers] = useState([
     {
       id: 1,
@@ -107,11 +58,7 @@ export default function Home() {
       distance: '2083.9',
       availableTankers: 3,
       busyTankers: 1,
-      rates: [
-        { liters: 1000, price: 450, label: '1000L' },
-        { liters: 2000, price: 750, label: '2000L' },
-        { liters: 5000, price: 1100, label: '5000L' }
-      ]
+      rates: { small: 450, medium: 750, large: 1100 }
     },
     {
       id: 2,
@@ -119,11 +66,7 @@ export default function Home() {
       distance: '2084.0',
       availableTankers: 5,
       busyTankers: 2,
-      rates: [
-        { liters: 1000, price: 500, label: '1000L' },
-        { liters: 2000, price: 800, label: '2000L' },
-        { liters: 5000, price: 1200, label: '5000L' }
-      ]
+      rates: { small: 500, medium: 800, large: 1200 }
     }
   ]);
 
@@ -146,41 +89,29 @@ export default function Home() {
     })();
   }, []);
 
-  useEffect(() => {
-    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (showSearchOverlay) {
-        setShowSearchOverlay(false);
-        return true;
-      }
-      if (showProfileMenu) {
-        setShowProfileMenu(false);
-        return true;
-      }
-      return false;
-    });
+  const profileMenu = () => {
+    console.log('Current user email:', userEmail);
+  };
 
-    return () => backHandler.remove();
-  }, [showSearchOverlay, showProfileMenu]);
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
 
-  const handleLocationSelect = async (suggestion) => {
-    if (suggestion.type === 'current') {
-      goToCurrentLocation();
-    } else if (suggestion.coordinates) {
-      setSelectedLocation(suggestion.coordinates);
-      setSearchQuery(suggestion.title);
-    } else {
-      try {
-        const results = await Location.geocodeAsync(suggestion.address || suggestion.title);
-        if (results.length > 0) {
-          const { latitude, longitude } = results[0];
-          setSelectedLocation({ latitude, longitude });
-          setSearchQuery(suggestion.title);
+    try {
+      const result = await Location.geocodeAsync(searchQuery);
+      if (result.length > 0) {
+        const { latitude, longitude } = result[0];
+        if (Platform.OS !== 'web' && mapRef.current) {
+          mapRef.current?.animateToRegion({
+            latitude,
+            longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          });
         }
-      } catch (error) {
-        console.error('Error geocoding address:', error);
       }
+    } catch (error) {
+      console.error('Error searching location:', error);
     }
-    setShowSearchOverlay(false);
   };
 
   const goToCurrentLocation = async () => {
@@ -201,8 +132,16 @@ export default function Home() {
       }
 
       setLocation(location);
-      setSelectedLocation(null);
-      setSearchQuery('Current Location');
+      console.log("Location updated");
+
+      if (Platform.OS !== 'web' && mapRef.current) {
+        mapRef.current?.animateToRegion({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        });
+      }
     } catch (error) {
       console.error("Error getting location:", error);
       alert("Failed to get location. Please check your GPS settings.");
@@ -225,7 +164,10 @@ export default function Home() {
         <View style={styles.headerButtons}>
           <TouchableOpacity 
             style={[styles.iconButton, { backgroundColor: cardBgColor }]}
-            onPress={() => setShowProfileMenu(true)}
+            onPress={() => {
+              profileMenu();
+              setShowProfileMenu(true);
+            }}
           >
             <User size={24} color="#FFA500" />
           </TouchableOpacity>
@@ -242,23 +184,37 @@ export default function Home() {
         </View>
       </View>
 
-      <TouchableOpacity 
-        style={[styles.searchContainer, { backgroundColor: cardBgColor }]}
-        onPress={() => setShowSearchOverlay(true)}
-      >
+      <View style={[styles.searchContainer, { backgroundColor: cardBgColor }]}>
         <Search size={20} color={subtitleColor} style={styles.searchIcon} />
-        <Text style={[styles.searchPlaceholder, { color: subtitleColor }]}>
-          {searchQuery || 'Search location'}
-        </Text>
-        <MapPin size={24} color="#FFA500" strokeWidth={2} />
-      </TouchableOpacity>
+        <TextInput
+          style={[styles.searchInput, { color: textColor }]}
+          placeholder="Search location"
+          placeholderTextColor={subtitleColor}
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onSubmitEditing={handleSearch}
+        />
+        <TouchableOpacity 
+          onPress={goToCurrentLocation}
+          activeOpacity={0.8}
+        >
+          <MapPin size={24} color="#FFA500" strokeWidth={2} />
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.mapContainer}>
         <MapView
-          ref={mapRef}
+          ref={Platform.OS === 'web' ? null : mapRef}
           style={styles.map}
-          currentLocation={location}
-          selectedLocation={selectedLocation}
+          {...(Platform.OS !== 'web' ? {
+            provider: 'google',
+            initialRegion: {
+              latitude: location.coords.latitude,
+              longitude: location.coords.longitude,
+              latitudeDelta: 0.0922,
+              longitudeDelta: 0.0421,
+            }
+          } : {})}
         />
       </View>
 
@@ -293,31 +249,28 @@ export default function Home() {
               </View>
 
               <Text style={[styles.ratesTitle, { color: textColor }]}>
-                Water Volume & Rates:
+                Rates:
               </Text>
               <View style={styles.ratesContainer}>
-                {supplier.rates.map((rate, index) => (
-                  <TouchableOpacity key={index} style={styles.rateButton}>
-                    <Text style={styles.rateButtonText}>{rate.label}</Text>
-                    <Text style={styles.ratePrice}>₹{rate.price}</Text>
-                    <Text style={styles.ratePerLiter}>
-                      (₹{(rate.price / rate.liters).toFixed(2)}/L)
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                <TouchableOpacity style={styles.rateButton}>
+                  <Text style={styles.rateButtonText}>Small</Text>
+                  <Text style={styles.ratePrice}>₹{supplier.rates.small}</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity style={styles.rateButton}>
+                  <Text style={styles.rateButtonText}>Medium</Text>
+                  <Text style={styles.ratePrice}>₹{supplier.rates.medium}</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity style={styles.rateButton}>
+                  <Text style={styles.rateButtonText}>Large</Text>
+                  <Text style={styles.ratePrice}>₹{supplier.rates.large}</Text>
+                </TouchableOpacity>
               </View>
             </View>
           ))}
         </ScrollView>
       </View>
-
-      <SearchOverlay
-        visible={showSearchOverlay}
-        onClose={() => setShowSearchOverlay(false)}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onLocationSelect={handleLocationSelect}
-      />
 
       <ProfileMenu 
         visible={showProfileMenu}
@@ -328,6 +281,25 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: 15,
+    borderRadius: 8,
+    paddingHorizontal: 15,
+    height: 50,
+  },
+  searchIcon: {
+    marginRight: 10,
+  },
+  inputWrapper: {
+    flex: 1, 
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontFamily: 'Montserrat-Regular',
+  },
   container: {
     flex: 1,
   },
@@ -369,14 +341,13 @@ const styles = StyleSheet.create({
     margin: 15,
     borderRadius: 8,
     paddingHorizontal: 15,
-    height: 50,
   },
   searchIcon: {
     marginRight: 10,
   },
-  searchPlaceholder: {
+  searchInput: {
     flex: 1,
-    fontSize: 16,
+    padding: 12,
     fontFamily: 'Montserrat-Regular',
   },
   mapContainer: {
@@ -386,29 +357,29 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  currentLocationMarker: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(37, 99, 235, 0.2)',
+  currentLocationButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  currentLocationDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#2563eb',
-  },
-  supplierMarker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 165, 0, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   bottomSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     height: height * 0.45,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -494,19 +465,12 @@ const styles = StyleSheet.create({
   rateButtonText: {
     color: '#000000',
     fontFamily: 'Montserrat-Medium',
-    fontSize: 14,
+    fontSize: 12,
   },
   ratePrice: {
     color: '#000000',
     fontFamily: 'Montserrat-SemiBold',
-    fontSize: 16,
+    fontSize: 14,
     marginTop: 2,
-  },
-  ratePerLiter: {
-    color: '#000000',
-    fontFamily: 'Montserrat-Regular',
-    fontSize: 12,
-    marginTop: 2,
-    opacity: 0.8,
   },
 });
