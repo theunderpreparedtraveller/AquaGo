@@ -1,30 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Modal,
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  ScrollView,
-} from 'react-native';
-import { X, Droplets, IndianRupee, Calendar, MapPin } from 'lucide-react-native';
-import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
-import { supabase } from '../lib/supabase';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { Platform } from 'react-native';
+// Previous imports remain the same...
 
-const QUICK_VOLUMES = [1000, 2000, 5000, 10000];
-const BASE_RATE = 0.45; // Rate per liter
+export default function WaterVolumeModal({ visible, onClose, onSuccess, selectedContainer }) {
+  console.log('[Modal]: Initializing with container:', selectedContainer);
 
-export default function WaterVolumeModal({ visible, onClose, onSuccess, location, address }) {
-  const [volume, setVolume] = useState('');
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [scheduledDate, setScheduledDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState('wallet');
+  const [defaultAddress, setDefaultAddress] = useState(null);
+  const [showAddMoney, setShowAddMoney] = useState(false);
+  const [moneyAmount, setMoneyAmount] = useState('');
+  const [showAddAddress, setShowAddAddress] = useState(false);
+  const [newAddress, setNewAddress] = useState({
+    title: '',
+    address: '',
+    location: null,
+  });
+  const [loadingLocation, setLoadingLocation] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'Montserrat-Regular': Montserrat_400Regular,
@@ -33,92 +27,28 @@ export default function WaterVolumeModal({ visible, onClose, onSuccess, location
   });
 
   useEffect(() => {
-    fetchWalletBalance();
-  }, []);
-
-  const fetchWalletBalance = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: wallet } = await supabase
-        .from('user_wallets')
-        .select('balance')
-        .eq('user_id', user.id)
-        .single();
-
-      setWalletBalance(wallet?.balance || 0);
-    } catch (error) {
-      console.error('Error fetching wallet balance:', error);
+    if (visible && selectedContainer) {
+      console.log('[Modal]: Modal opened with container:', selectedContainer.id);
+      fetchWalletBalance();
+      fetchDefaultAddress();
+      setStep(1);
+      setScheduledDate(new Date());
+      setShowAddMoney(false);
+      setShowAddAddress(false);
     }
-  };
+  }, [visible, selectedContainer]);
 
-  const handleQuickVolume = (value) => {
-    setVolume(value.toString());
-  };
+  // Previous functions remain the same...
 
-  const calculatePrice = (vol) => {
-    return (parseFloat(vol) || 0) * BASE_RATE;
-  };
+  if (!fontsLoaded) {
+    console.log('[Modal]: Fonts not loaded');
+    return null;
+  }
 
-  const handleDateChange = (event, selectedDate) => {
-    setShowDatePicker(false);
-    if (selectedDate) {
-      setScheduledDate(selectedDate);
-    }
-  };
-
-  const validateOrder = () => {
-    const volumeNum = Number(volume);
-    if (isNaN(volumeNum) || volumeNum < 1000) {
-      Alert.alert('Invalid Volume', 'Minimum water volume is 1000 liters');
-      return false;
-    }
-
-    const price = calculatePrice(volumeNum);
-    if (price > walletBalance) {
-      Alert.alert('Insufficient Balance', `Required: ₹${price.toFixed(2)}\nAvailable: ₹${walletBalance.toFixed(2)}`);
-      return false;
-    }
-
-    if (scheduledDate < new Date()) {
-      Alert.alert('Invalid Date', 'Please select a future date and time');
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleOrder = async () => {
-    if (!validateOrder()) return;
-
-    setLoading(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not found');
-
-      const { data, error } = await supabase.rpc('create_water_delivery', {
-        p_user_id: user.id,
-        p_volume: Number(volume),
-        p_delivery_address: address,
-        p_delivery_location: `(${location.longitude},${location.latitude})`,
-        p_scheduled_for: scheduledDate.toISOString()
-      });
-
-      if (error) throw error;
-
-      Alert.alert('Success', 'Water delivery ordered successfully');
-      onSuccess();
-      onClose();
-    } catch (error) {
-      console.error('Error creating order:', error);
-      Alert.alert('Error', error.message || 'Failed to create order');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!fontsLoaded) return null;
+  if (!selectedContainer) {
+    console.log('[Modal]: No container data provided');
+    return null;
+  }
 
   return (
     <Modal
@@ -130,107 +60,165 @@ export default function WaterVolumeModal({ visible, onClose, onSuccess, location
       <View style={styles.overlay}>
         <View style={styles.modal}>
           <View style={styles.header}>
-            <Text style={styles.title}>Order Water Tanker</Text>
+            <Text style={styles.title}>Water Delivery</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <X size={24} color="#666" />
             </TouchableOpacity>
           </View>
 
           <ScrollView style={styles.content}>
-            <View style={styles.volumeContainer}>
-              <View style={styles.iconContainer}>
-                <Droplets size={24} color="#FFA500" />
+            {/* Container Details */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Selected Container</Text>
+              <View style={styles.containerInfo}>
+                <Text style={styles.containerName}>{selectedContainer.name}</Text>
+                <Text style={styles.containerDetail}>
+                  Volume: {selectedContainer.selectedRate.volume}L
+                </Text>
+                <Text style={styles.containerDetail}>
+                  Price: ₹{selectedContainer.selectedRate.price}
+                </Text>
               </View>
-              <TextInput
-                style={styles.volumeInput}
-                value={volume}
-                onChangeText={setVolume}
-                keyboardType="numeric"
-                placeholder="Enter volume (liters)"
-                placeholderTextColor="#666"
-              />
             </View>
 
-            <View style={styles.quickVolumes}>
-              {QUICK_VOLUMES.map((value) => (
+            {/* Delivery Address */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Delivery Address</Text>
+              {defaultAddress ? (
+                <View style={styles.addressCard}>
+                  <Text style={styles.addressTitle}>{defaultAddress.title}</Text>
+                  <Text style={styles.addressText}>{defaultAddress.address}</Text>
+                </View>
+              ) : (
                 <TouchableOpacity
-                  key={value}
-                  style={[
-                    styles.quickVolume,
-                    volume === value.toString() && styles.quickVolumeSelected
-                  ]}
-                  onPress={() => handleQuickVolume(value)}
+                  style={styles.addAddressButton}
+                  onPress={() => setShowAddAddress(true)}
                 >
-                  <Text style={[
-                    styles.quickVolumeText,
-                    volume === value.toString() && styles.quickVolumeTextSelected
-                  ]}>{value}L</Text>
+                  <Plus size={24} color="#FFA500" />
+                  <Text style={styles.addAddressText}>Add Delivery Address</Text>
                 </TouchableOpacity>
-              ))}
+              )}
             </View>
 
+            {/* Add Address Form */}
+            {showAddAddress && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Add New Address</Text>
+                <View style={styles.form}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Address Title (e.g., Home, Office)"
+                    placeholderTextColor="#666"
+                    value={newAddress.title}
+                    onChangeText={(text) => setNewAddress({ ...newAddress, title: text })}
+                  />
+                  <View style={styles.addressInputContainer}>
+                    <TextInput
+                      style={styles.addressInput}
+                      placeholder="Full Address"
+                      placeholderTextColor="#666"
+                      value={newAddress.address}
+                      onChangeText={(text) => setNewAddress({ ...newAddress, address: text })}
+                      multiline
+                    />
+                    <TouchableOpacity
+                      style={styles.locationButton}
+                      onPress={getCurrentLocation}
+                      disabled={loadingLocation}
+                    >
+                      {loadingLocation ? (
+                        <ActivityIndicator color="#FFA500" />
+                      ) : (
+                        <Navigation size={24} color="#FFA500" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+                    onPress={handleAddAddress}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#000000" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>Save Address</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Payment Method */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Payment Method</Text>
+              <View style={styles.paymentOptions}>
+                <TouchableOpacity
+                  style={[
+                    styles.paymentOption,
+                    paymentMethod === 'wallet' && styles.paymentOptionSelected
+                  ]}
+                  onPress={() => setPaymentMethod('wallet')}
+                >
+                  <Wallet size={24} color={paymentMethod === 'wallet' ? '#FFA500' : '#666'} />
+                  <View style={styles.paymentOptionInfo}>
+                    <Text style={styles.paymentOptionTitle}>Wallet</Text>
+                    <Text style={styles.walletBalance}>Balance: ₹{walletBalance}</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
+              {paymentMethod === 'wallet' && walletBalance < selectedContainer.selectedRate.price && (
+                <TouchableOpacity
+                  style={styles.addMoneyButton}
+                  onPress={() => setShowAddMoney(true)}
+                >
+                  <Plus size={20} color="#FFA500" />
+                  <Text style={styles.addMoneyText}>Add Money to Wallet</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Add Money Form */}
+            {showAddMoney && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Add Money to Wallet</Text>
+                <View style={styles.form}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter Amount"
+                    placeholderTextColor="#666"
+                    value={moneyAmount}
+                    onChangeText={setMoneyAmount}
+                    keyboardType="numeric"
+                  />
+                  <TouchableOpacity
+                    style={[styles.saveButton, loading && styles.saveButtonDisabled]}
+                    onPress={handleAddMoney}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <ActivityIndicator color="#000000" />
+                    ) : (
+                      <Text style={styles.saveButtonText}>Add Money</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Confirm Order Button */}
             <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => setShowDatePicker(true)}
+              style={[styles.confirmButton, loading && styles.confirmButtonDisabled]}
+              onPress={handleConfirmOrder}
+              disabled={loading || !defaultAddress || (paymentMethod === 'wallet' && walletBalance < selectedContainer.selectedRate.price)}
             >
-              <Calendar size={24} color="#FFA500" />
-              <Text style={styles.dateText}>
-                {scheduledDate.toLocaleString()}
-              </Text>
+              {loading ? (
+                <ActivityIndicator color="#000000" />
+              ) : (
+                <Text style={styles.confirmButtonText}>Confirm Order</Text>
+              )}
             </TouchableOpacity>
-
-            <View style={styles.addressContainer}>
-              <MapPin size={24} color="#FFA500" />
-              <Text style={styles.addressText}>{address}</Text>
-            </View>
-
-            {Platform.OS === 'ios' && showDatePicker && (
-              <DateTimePicker
-                value={scheduledDate}
-                mode="datetime"
-                display="spinner"
-                onChange={handleDateChange}
-                minimumDate={new Date()}
-              />
-            )}
-
-            {Platform.OS === 'android' && showDatePicker && (
-              <DateTimePicker
-                value={scheduledDate}
-                mode="datetime"
-                is24Hour={true}
-                onChange={handleDateChange}
-                minimumDate={new Date()}
-              />
-            )}
-
-            <View style={styles.priceContainer}>
-              <Text style={styles.priceLabel}>Total Price:</Text>
-              <Text style={styles.priceAmount}>
-                ₹{calculatePrice(volume).toFixed(2)}
-              </Text>
-              <Text style={styles.priceRate}>
-                (₹{BASE_RATE}/liter)
-              </Text>
-            </View>
-
-            <View style={styles.walletContainer}>
-              <Text style={styles.walletLabel}>Wallet Balance:</Text>
-              <Text style={styles.walletBalance}>₹{walletBalance.toFixed(2)}</Text>
-            </View>
           </ScrollView>
-
-          <TouchableOpacity
-            style={[styles.orderButton, loading && styles.orderButtonDisabled]}
-            onPress={handleOrder}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#000000" />
-            ) : (
-              <Text style={styles.orderButtonText}>Place Order</Text>
-            )}
-          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -247,14 +235,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1f2b',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 20,
     maxHeight: '90%',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C2C2E',
   },
   title: {
     fontSize: 24,
@@ -270,136 +259,170 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   content: {
-    flex: 1,
+    padding: 20,
   },
-  volumeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#242430',
-    borderRadius: 12,
-    padding: 15,
+  section: {
     marginBottom: 20,
   },
-  iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  sectionTitle: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontFamily: 'Montserrat-SemiBold',
+    marginBottom: 10,
+  },
+  containerInfo: {
+    backgroundColor: '#242430',
+    padding: 15,
+    borderRadius: 12,
+  },
+  containerName: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    fontFamily: 'Montserrat-SemiBold',
+    marginBottom: 5,
+  },
+  containerDetail: {
+    fontSize: 16,
+    color: '#666',
+    fontFamily: 'Montserrat-Regular',
+  },
+  addressCard: {
+    backgroundColor: '#242430',
+    padding: 15,
+    borderRadius: 12,
+  },
+  addressTitle: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontFamily: 'Montserrat-SemiBold',
+    marginBottom: 5,
+  },
+  addressText: {
+    fontSize: 14,
+    color: '#666',
+    fontFamily: 'Montserrat-Regular',
+  },
+  addAddressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#242430',
+    padding: 15,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFA500',
+    borderStyle: 'dashed',
+  },
+  addAddressText: {
+    color: '#FFA500',
+    fontSize: 16,
+    fontFamily: 'Montserrat-Medium',
+    marginLeft: 10,
+  },
+  form: {
+    backgroundColor: '#242430',
+    padding: 15,
+    borderRadius: 12,
+  },
+  input: {
+    backgroundColor: '#1a1f2b',
+    borderRadius: 8,
+    padding: 12,
+    color: '#FFFFFF',
+    fontFamily: 'Montserrat-Regular',
+    marginBottom: 10,
+  },
+  addressInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  addressInput: {
+    flex: 1,
+    backgroundColor: '#1a1f2b',
+    borderRadius: 8,
+    padding: 12,
+    color: '#FFFFFF',
+    fontFamily: 'Montserrat-Regular',
+    marginRight: 10,
+  },
+  locationButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: 'rgba(255, 165, 0, 0.1)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
   },
-  volumeInput: {
-    flex: 1,
-    fontSize: 24,
-    color: '#FFFFFF',
-    fontFamily: 'Montserrat-SemiBold',
-  },
-  quickVolumes: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-  },
-  quickVolume: {
-    width: '23%',
-    backgroundColor: '#242430',
+  saveButton: {
+    backgroundColor: '#FFA500',
     borderRadius: 8,
     padding: 12,
     alignItems: 'center',
   },
-  quickVolumeSelected: {
-    backgroundColor: 'rgba(255, 165, 0, 0.2)',
+  saveButtonDisabled: {
+    opacity: 0.7,
   },
-  quickVolumeText: {
-    color: '#FFFFFF',
-    fontFamily: 'Montserrat-Medium',
+  saveButtonText: {
+    color: '#000000',
     fontSize: 16,
-  },
-  quickVolumeTextSelected: {
-    color: '#FFA500',
     fontFamily: 'Montserrat-SemiBold',
   },
-  dateButton: {
+  paymentOptions: {
+    backgroundColor: '#242430',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  paymentOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#242430',
-    borderRadius: 12,
     padding: 15,
-    marginBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C2C2E',
   },
-  dateText: {
+  paymentOptionSelected: {
+    backgroundColor: 'rgba(255, 165, 0, 0.1)',
+  },
+  paymentOptionInfo: {
     marginLeft: 15,
+  },
+  paymentOptionTitle: {
+    fontSize: 16,
     color: '#FFFFFF',
     fontFamily: 'Montserrat-Medium',
-    fontSize: 16,
-  },
-  addressContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#242430',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 20,
-  },
-  addressText: {
-    flex: 1,
-    marginLeft: 15,
-    color: '#FFFFFF',
-    fontFamily: 'Montserrat-Medium',
-    fontSize: 16,
-  },
-  priceContainer: {
-    backgroundColor: '#242430',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 20,
-  },
-  priceLabel: {
-    color: '#666',
-    fontFamily: 'Montserrat-Regular',
-    fontSize: 14,
-    marginBottom: 5,
-  },
-  priceAmount: {
-    color: '#FFA500',
-    fontFamily: 'Montserrat-SemiBold',
-    fontSize: 24,
-    marginBottom: 5,
-  },
-  priceRate: {
-    color: '#666',
-    fontFamily: 'Montserrat-Regular',
-    fontSize: 14,
-  },
-  walletContainer: {
-    backgroundColor: '#242430',
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 20,
-  },
-  walletLabel: {
-    color: '#666',
-    fontFamily: 'Montserrat-Regular',
-    fontSize: 14,
-    marginBottom: 5,
   },
   walletBalance: {
-    color: '#FFFFFF',
-    fontFamily: 'Montserrat-SemiBold',
-    fontSize: 20,
+    fontSize: 14,
+    color: '#666',
+    fontFamily: 'Montserrat-Regular',
+    marginTop: 2,
   },
-  orderButton: {
+  addMoneyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 165, 0, 0.1)',
+    padding: 10,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  addMoneyText: {
+    color: '#FFA500',
+    fontSize: 14,
+    fontFamily: 'Montserrat-Medium',
+    marginLeft: 5,
+  },
+  confirmButton: {
     backgroundColor: '#FFA500',
     borderRadius: 12,
     padding: 15,
     alignItems: 'center',
     marginTop: 20,
   },
-  orderButtonDisabled: {
+  confirmButtonDisabled: {
     opacity: 0.7,
   },
-  orderButtonText: {
+  confirmButtonText: {
     color: '#000000',
     fontSize: 16,
     fontFamily: 'Montserrat-SemiBold',

@@ -1,16 +1,15 @@
 import { useState } from 'react';
-import { StyleSheet, View, TextInput, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, TextInput, Text, TouchableOpacity } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
-import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const { signIn } = useAuth();
 
   const [fontsLoaded] = useFonts({
     'Montserrat-Regular': Montserrat_400Regular,
@@ -24,23 +23,38 @@ export default function Login() {
 
   const handleLogin = async () => {
     try {
-      setError('');
       setLoading(true);
+      setError('');
 
       if (!email || !password) {
-        setError('Please enter both email and password');
+        const errorMsg = 'Please fill in all fields';
+        console.error('[Login Error]:', errorMsg);
+        setError(errorMsg);
         return;
       }
 
-      const { error: signInError } = await signIn(email, password);
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      if (signInError) throw signInError;
+      if (signInError) {
+        console.error('[Login Error]:', signInError.message);
+        setError(signInError.message);
+        return;
+      }
 
-      router.replace('/(tabs)');
-      
-    } catch (error: any) {
-      console.error('Login error:', error.message);
-      setError(error.message || 'Failed to log in');
+      if (data?.user) {
+        console.log('[Login Success]:', 'User logged in successfully', {
+          userId: data.user.id,
+          email: data.user.email
+        });
+        router.replace('/(tabs)');
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred';
+      console.error('[Login Error]:', errorMsg);
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -51,11 +65,7 @@ export default function Login() {
       <View style={styles.formContainer}>
         <Text style={styles.title}>Log in</Text>
         
-        {error ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        ) : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
         
         <TextInput
           style={styles.input}
@@ -79,15 +89,13 @@ export default function Login() {
         />
 
         <TouchableOpacity 
-          style={[styles.loginButton, loading && styles.disabledButton]} 
+          style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
           onPress={handleLogin}
           disabled={loading}
         >
-          {loading ? (
-            <ActivityIndicator color="#000000" />
-          ) : (
-            <Text style={styles.loginButtonText}>LOG IN</Text>
-          )}
+          <Text style={styles.loginButtonText}>
+            {loading ? 'LOGGING IN...' : 'LOG IN'}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.signupContainer}>
@@ -121,15 +129,10 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 30,
   },
-  errorContainer: {
-    backgroundColor: 'rgba(255, 59, 48, 0.1)',
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 15,
-  },
   errorText: {
     color: '#FF3B30',
-    fontFamily: 'Montserrat-Medium',
+    fontFamily: 'Montserrat-Regular',
+    marginBottom: 15,
     textAlign: 'center',
   },
   input: {
@@ -147,7 +150,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-  disabledButton: {
+  loginButtonDisabled: {
     opacity: 0.7,
   },
   loginButtonText: {

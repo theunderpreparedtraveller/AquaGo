@@ -1,42 +1,69 @@
 import { useEffect } from 'react';
-import { Redirect, Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { ThemeProvider } from '../context/ThemeContext';
-import { AuthProvider, useAuth } from '../context/AuthContext';
+import { SessionProvider, useSession } from '../context/SessionContext';
+import { View, ActivityIndicator } from 'react-native';
 
-function RootLayoutNav() {
-  const { user, loading } = useAuth();
+function useProtectedRoute() {
+  const { session, isLoading } = useSession();
+  const segments = useSegments();
+  const router = useRouter();
 
-  useFrameworkReady();
+  useEffect(() => {
+    if (isLoading) return;
 
-  if (loading) {
-    return null;
+    const inAuthGroup = segments[0] === '(auth)';
+
+    if (!session && !inAuthGroup) {
+      // Redirect to login if not authenticated
+      router.replace('/login');
+    } else if (session && inAuthGroup) {
+      // Redirect to home if authenticated and trying to access auth pages
+      router.replace('/');
+    }
+  }, [session, segments, isLoading]);
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1f2b' }}>
+        <ActivityIndicator size="large" color="#FFA500" />
+      </View>
+    );
   }
 
+  return null;
+}
+
+function RootLayoutNav() {
+  const loading = useProtectedRoute();
+  
+  if (loading) return loading;
+
   return (
-    <>
-      <StatusBar style="light" />
-      <Stack screenOptions={{ headerShown: false }}>
-        {!user ? (
-          // Auth Group
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-        ) : (
-          // App Group
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        )}
-      </Stack>
-    </>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="home" options={{ headerShown: false }} />
+      <Stack.Screen name="profile" options={{ headerShown: false }} />
+      <Stack.Screen name="wallet" options={{ headerShown: false }} />
+      <Stack.Screen name="activity" options={{ headerShown: false }} />
+      <Stack.Screen name="payment-methods" options={{ headerShown: false }} />
+      <Stack.Screen name="settings" options={{ headerShown: false }} />
+    </Stack>
   );
 }
 
 export default function RootLayout() {
   useFrameworkReady();
+
   return (
-    <AuthProvider>
+    <SessionProvider>
       <ThemeProvider>
+        <StatusBar style="light" />
         <RootLayoutNav />
       </ThemeProvider>
-    </AuthProvider>
+    </SessionProvider>
   );
 }

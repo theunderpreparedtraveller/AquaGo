@@ -1,6 +1,9 @@
-import { StyleSheet, View, Text, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, ScrollView, Platform, StatusBar } from 'react-native';
 import { Truck, Check, Clock } from 'lucide-react-native';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
+
+// Get status bar height
+const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
 
 export default function Activity() {
   const [fontsLoaded] = useFonts({
@@ -99,7 +102,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#1a1f2b',
-    padding: 20,
+    paddingTop: STATUSBAR_HEIGHT + 20,
+    paddingHorizontal: 20,
   },
   activityCard: {
     flexDirection: 'row',

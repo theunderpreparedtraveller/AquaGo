@@ -1,74 +1,131 @@
 import { useEffect, useState, useRef } from 'react';
-import { StyleSheet, View, Text, TextInput, ScrollView, TouchableOpacity, Dimensions, Platform } from 'react-native';
+import { 
+  StyleSheet, 
+  View, 
+  Text, 
+  ScrollView, 
+  TouchableOpacity, 
+  Dimensions, 
+  Platform,
+  BackHandler,
+} from 'react-native';
 import * as Location from 'expo-location';
 import { Search, MapPin, Sun, Moon, User } from 'lucide-react-native';
 import { useFonts, Montserrat_300Light, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
 import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../context/AuthContext';
+import { useRouter } from 'expo-router';
+import SearchOverlay from '../../components/SearchOverlay';
 import ProfileMenu from '../../components/ProfileMenu';
+import { supabase } from '../../lib/supabase';
+import WaterVolumeModal from '../../components/WaterVolumeModal';
 
 const { height } = Dimensions.get('window');
 
+interface WaterContainer {
+  id: string;
+  name: string;
+  location: string;
+  address: string;
+  capacity: number;
+  available_volume: number;
+  is_online: boolean;
+  rates: Array<{
+    volume: number;
+    price: number;
+  }>;
+  distance?: number;
+}
+
 const MapView = Platform.select({
   web: () => {
-    return function WebMap({ style, children }) {
+    return function WebMap({ style, currentLocation, selectedLocation }) {
+      const [mapUrl, setMapUrl] = useState('https://www.openstreetmap.org/export/embed.html?bbox=77.5746,12.9516,77.6146,12.9916&amp;layer=mapnik');
+
+      useEffect(() => {
+        if (selectedLocation) {
+          const { latitude, longitude } = selectedLocation;
+          setMapUrl(`https://www.openstreetmap.org/export/embed.html?bbox=${longitude-0.02},${latitude-0.02},${longitude+0.02},${latitude+0.02}&amp;layer=mapnik`);
+        } else if (currentLocation) {
+          const { latitude, longitude } = currentLocation.coords;
+          setMapUrl(`https://www.openstreetmap.org/export/embed.html?bbox=${longitude-0.02},${latitude-0.02},${longitude+0.02},${latitude+0.02}&amp;layer=mapnik`);
+        }
+      }, [currentLocation, selectedLocation]);
+
       return (
-        <div style={{ 
-          position: 'relative', 
-          width: '100%', 
-          height: '100%',
-          backgroundColor: '#f0f0f0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          ...style 
-        }}>
-          <Text>Map View</Text>
-          {children}
-        </div>
+        <View style={[style, { overflow: 'hidden' }]}>
+          <iframe
+            title="location-map"
+            src={mapUrl}
+            style={{
+              border: 0,
+              height: '100%',
+              width: '100%',
+            }}
+          />
+        </View>
       );
     };
   },
   default: () => {
     try {
-      return require('react-native-maps').default;
+      // Only import react-native-maps on native platforms
+      if (Platform.OS !== 'web') {
+        const Map = require('react-native-maps').default;
+        return function NativeMap({ style, currentLocation, selectedLocation }) {
+          if (!Map) return null;
+          
+          const region = selectedLocation ? {
+            latitude: selectedLocation.latitude,
+            longitude: selectedLocation.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          } : currentLocation ? {
+            latitude: currentLocation.coords.latitude,
+            longitude: currentLocation.coords.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          } : {
+            latitude: 12.9716,
+            longitude: 77.5946,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          };
+          
+          return (
+            <Map
+              style={style}
+              region={region}
+            />
+          );
+        };
+      }
     } catch (e) {
-      return function FallbackMap() {
-        return (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Text>Map not available</Text>
-          </View>
-        );
-      };
+      console.error('Error loading map:', e);
     }
+    return function FallbackMap() {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text>Map not available</Text>
+        </View>
+      );
+    };
   },
 })();
 
 export default function Home() {
+  const router = useRouter();
   const { isDarkMode, toggleTheme } = useTheme();
-  const { userEmail } = useAuth();
   const [location, setLocation] = useState(null);
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showSearchOverlay, setShowSearchOverlay] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [containers, setContainers] = useState<WaterContainer[]>([]);
+  const [loading, setLoading] = useState(true);
   const mapRef = useRef(null);
-  const [suppliers] = useState([
-    {
-      id: 1,
-      name: 'Metro Water Services',
-      distance: '2083.9',
-      availableTankers: 3,
-      busyTankers: 1,
-      rates: { small: 450, medium: 750, large: 1100 }
-    },
-    {
-      id: 2,
-      name: 'City Water Supply',
-      distance: '2084.0',
-      availableTankers: 5,
-      busyTankers: 2,
-      rates: { small: 500, medium: 800, large: 1200 }
-    }
-  ]);
+  const [defaultAddress, setDefaultAddress] = useState(null);
+  const [showVolumeModal, setShowVolumeModal] = useState(false);
+  const [selectedContainer, setSelectedContainer] = useState(null);
 
   const [fontsLoaded] = useFonts({
     'Montserrat-Light': Montserrat_300Light,
@@ -76,6 +133,102 @@ export default function Home() {
     'Montserrat-Medium': Montserrat_500Medium,
     'Montserrat-SemiBold': Montserrat_600SemiBold,
   });
+
+  useEffect(() => {
+    fetchContainers();
+    
+    // Subscribe to real-time updates
+    const subscription = supabase
+      .channel('water_containers')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'water_containers'
+      }, (payload) => {
+        console.log('Real-time update:', payload);
+        fetchContainers();
+      })
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchDefaultAddress = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from('user_addresses')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('is_default', true)
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          const pointStr = data.location.slice(1, -1).split(',');
+          setDefaultAddress({
+            ...data,
+            coordinates: {
+              longitude: parseFloat(pointStr[0]),
+              latitude: parseFloat(pointStr[1])
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching default address:', error);
+      }
+    };
+
+    fetchDefaultAddress();
+  }, []);
+
+  const fetchContainers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('water_containers')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+
+      const containersWithDistance = data.map(container => {
+        const pointStr = container.location.slice(1, -1).split(',');
+        const containerLocation = {
+          longitude: parseFloat(pointStr[0]),
+          latitude: parseFloat(pointStr[1])
+        };
+
+        let distance = 0;
+        if (defaultAddress?.coordinates) {
+          // Calculate distance from default address instead of current location
+          distance = calculateDistance(
+            defaultAddress.coordinates.latitude,
+            defaultAddress.coordinates.longitude,
+            containerLocation.latitude,
+            containerLocation.longitude
+          );
+        }
+
+        return {
+          ...container,
+          distance: distance
+        };
+      });
+
+      // Sort by distance
+      containersWithDistance.sort((a, b) => a.distance - b.distance);
+      setContainers(containersWithDistance);
+    } catch (error) {
+      console.error('Error fetching containers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -86,32 +239,61 @@ export default function Home() {
 
       let location = await Location.getCurrentPositionAsync({});
       setLocation(location);
+      fetchContainers();
     })();
   }, []);
 
-  const profileMenu = () => {
-    console.log('Current user email:', userEmail);
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (showSearchOverlay) {
+        setShowSearchOverlay(false);
+        return true;
+      }
+      if (showProfileMenu) {
+        setShowProfileMenu(false);
+        return true;
+      }
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [showSearchOverlay, showProfileMenu]);
+
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
   };
 
-  const handleSearch = async () => {
-    if (!searchQuery.trim()) return;
+  const deg2rad = (deg) => {
+    return deg * (Math.PI/180);
+  };
 
-    try {
-      const result = await Location.geocodeAsync(searchQuery);
-      if (result.length > 0) {
-        const { latitude, longitude } = result[0];
-        if (Platform.OS !== 'web' && mapRef.current) {
-          mapRef.current?.animateToRegion({
-            latitude,
-            longitude,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          });
+  const handleLocationSelect = async (suggestion) => {
+    if (suggestion.type === 'current') {
+      goToCurrentLocation();
+    } else if (suggestion.coordinates) {
+      setSelectedLocation(suggestion.coordinates);
+      setSearchQuery(suggestion.title);
+    } else {
+      try {
+        const results = await Location.geocodeAsync(suggestion.address || suggestion.title);
+        if (results.length > 0) {
+          const { latitude, longitude } = results[0];
+          setSelectedLocation({ latitude, longitude });
+          setSearchQuery(suggestion.title);
         }
+      } catch (error) {
+        console.error('Error geocoding address:', error);
       }
-    } catch (error) {
-      console.error('Error searching location:', error);
     }
+    setShowSearchOverlay(false);
   };
 
   const goToCurrentLocation = async () => {
@@ -132,20 +314,27 @@ export default function Home() {
       }
 
       setLocation(location);
-      console.log("Location updated");
-
-      if (Platform.OS !== 'web' && mapRef.current) {
-        mapRef.current?.animateToRegion({
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
-      }
+      setSelectedLocation(null);
+      setSearchQuery('Current Location');
     } catch (error) {
       console.error("Error getting location:", error);
       alert("Failed to get location. Please check your GPS settings.");
     }
+  };
+
+  const handleRateSelect = (container, rate) => {
+    if (!container.is_online) return;
+    
+    console.log('[Container Selection]:', {
+      container: container.id,
+      rate: rate
+    });
+    
+    setSelectedContainer({
+      ...container,
+      selectedRate: rate
+    });
+    setShowVolumeModal(true);
   };
 
   if (!fontsLoaded || !location) {
@@ -164,10 +353,7 @@ export default function Home() {
         <View style={styles.headerButtons}>
           <TouchableOpacity 
             style={[styles.iconButton, { backgroundColor: cardBgColor }]}
-            onPress={() => {
-              profileMenu();
-              setShowProfileMenu(true);
-            }}
+            onPress={() => setShowProfileMenu(true)}
           >
             <User size={24} color="#FFA500" />
           </TouchableOpacity>
@@ -184,37 +370,23 @@ export default function Home() {
         </View>
       </View>
 
-      <View style={[styles.searchContainer, { backgroundColor: cardBgColor }]}>
+      <TouchableOpacity 
+        style={[styles.searchContainer, { backgroundColor: cardBgColor }]}
+        onPress={() => setShowSearchOverlay(true)}
+      >
         <Search size={20} color={subtitleColor} style={styles.searchIcon} />
-        <TextInput
-          style={[styles.searchInput, { color: textColor }]}
-          placeholder="Search location"
-          placeholderTextColor={subtitleColor}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
-        />
-        <TouchableOpacity 
-          onPress={goToCurrentLocation}
-          activeOpacity={0.8}
-        >
-          <MapPin size={24} color="#FFA500" strokeWidth={2} />
-        </TouchableOpacity>
-      </View>
+        <Text style={[styles.searchPlaceholder, { color: subtitleColor }]}>
+          {searchQuery || 'Search location'}
+        </Text>
+        <MapPin size={24} color="#FFA500" strokeWidth={2} />
+      </TouchableOpacity>
 
       <View style={styles.mapContainer}>
         <MapView
-          ref={Platform.OS === 'web' ? null : mapRef}
+          ref={mapRef}
           style={styles.map}
-          {...(Platform.OS !== 'web' ? {
-            provider: 'google',
-            initialRegion: {
-              latitude: location.coords.latitude,
-              longitude: location.coords.longitude,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            }
-          } : {})}
+          currentLocation={location}
+          selectedLocation={selectedLocation}
         />
       </View>
 
@@ -230,49 +402,89 @@ export default function Home() {
             Showing suppliers near your location
           </Text>
 
-          {suppliers.map((supplier) => (
-            <View key={supplier.id} style={[styles.supplierCard, { backgroundColor: cardBgColor }]}>
+          {loading ? (
+            <Text style={[styles.loadingText, { color: subtitleColor }]}>
+              Loading suppliers...
+            </Text>
+          ) : containers.map((container) => (
+            <View key={container.id} style={[styles.supplierCard, { backgroundColor: cardBgColor }]}>
               <View style={styles.supplierHeader}>
                 <Text style={[styles.supplierName, { color: textColor }]}>
-                  {supplier.name}
+                  {container.name}
                 </Text>
-                <View style={styles.dropIcon} />
+                <View style={[styles.statusIndicator, { 
+                  backgroundColor: container.is_online ? '#4CAF50' : '#FF3B30' 
+                }]} />
               </View>
               
               <View style={styles.supplierInfo}>
                 <Text style={[styles.distanceText, { color: subtitleColor }]}>
-                  📍 {supplier.distance} km away
+                  📍 {container.distance.toFixed(1)} km away
                 </Text>
-                <Text style={[styles.tankersText, { color: subtitleColor }]}>
-                  Available Tankers: {supplier.availableTankers}
+                <Text style={[styles.availabilityText, { color: subtitleColor }]}>
+                  Available Volume: {container.available_volume.toLocaleString()}L / {container.capacity.toLocaleString()}L
                 </Text>
+                <View style={styles.statusText}>
+                  <Text style={[styles.statusLabel, { color: container.is_online ? '#4CAF50' : '#FF3B30' }]}>
+                    {container.is_online ? '● Online' : '● Offline'}
+                  </Text>
+                </View>
               </View>
 
               <Text style={[styles.ratesTitle, { color: textColor }]}>
-                Rates:
+                Water Volume & Rates:
               </Text>
               <View style={styles.ratesContainer}>
-                <TouchableOpacity style={styles.rateButton}>
-                  <Text style={styles.rateButtonText}>Small</Text>
-                  <Text style={styles.ratePrice}>₹{supplier.rates.small}</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={styles.rateButton}>
-                  <Text style={styles.rateButtonText}>Medium</Text>
-                  <Text style={styles.ratePrice}>₹{supplier.rates.medium}</Text>
-                </TouchableOpacity>
-                
-                <TouchableOpacity style={styles.rateButton}>
-                  <Text style={styles.rateButtonText}>Large</Text>
-                  <Text style={styles.ratePrice}>₹{supplier.rates.large}</Text>
-                </TouchableOpacity>
+                {container.rates.map((rate, index) => (
+                  <TouchableOpacity 
+                    key={index} 
+                    style={[
+                      styles.rateButton,
+                      !container.is_online && styles.rateButtonDisabled
+                    ]}
+                    onPress={() => handleRateSelect(container, rate)}
+                    disabled={!container.is_online}
+                  >
+                    <Text style={styles.rateButtonText}>{rate.volume}L</Text>
+                    <Text style={styles.ratePrice}>₹{rate.price}</Text>
+                    <Text style={styles.ratePerLiter}>
+                      (₹{(rate.price / rate.volume).toFixed(2)}/L)
+                    </Text>
+                  </TouchableOpacity>
+                ))}
               </View>
             </View>
           ))}
         </ScrollView>
       </View>
 
-      <ProfileMenu 
+      {selectedContainer && (
+        <WaterVolumeModal
+          visible={showVolumeModal}
+          onClose={() => {
+            console.log('[Modal]: Closing modal');
+            setShowVolumeModal(false);
+            setSelectedContainer(null);
+          }}
+          onSuccess={() => {
+            console.log('[Modal]: Order successful');
+            setShowVolumeModal(false);
+            setSelectedContainer(null);
+            fetchContainers(); // Refresh containers after order
+          }}
+          selectedContainer={selectedContainer}
+        />
+      )}
+
+      <SearchOverlay
+        visible={showSearchOverlay}
+        onClose={() => setShowSearchOverlay(false)}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        onLocationSelect={handleLocationSelect}
+      />
+
+      <ProfileMenu
         visible={showProfileMenu}
         onClose={() => setShowProfileMenu(false)}
       />
@@ -281,25 +493,6 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    margin: 15,
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    height: 50,
-  },
-  searchIcon: {
-    marginRight: 10,
-  },
-  inputWrapper: {
-    flex: 1, 
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 10,
-    fontFamily: 'Montserrat-Regular',
-  },
   container: {
     flex: 1,
   },
@@ -341,13 +534,14 @@ const styles = StyleSheet.create({
     margin: 15,
     borderRadius: 8,
     paddingHorizontal: 15,
+    height: 50,
   },
   searchIcon: {
     marginRight: 10,
   },
-  searchInput: {
+  searchPlaceholder: {
     flex: 1,
-    padding: 12,
+    fontSize: 16,
     fontFamily: 'Montserrat-Regular',
   },
   mapContainer: {
@@ -357,29 +551,7 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  currentLocationButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
   bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     height: height * 0.45,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -415,6 +587,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Regular',
     marginBottom: 20,
   },
+  loadingText: {
+    textAlign: 'center',
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 16,
+    marginTop: 20,
+  },
   supplierCard: {
     borderRadius: 12,
     padding: 15,
@@ -430,10 +608,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Montserrat-SemiBold',
   },
-  dropIcon: {
+  statusIndicator: {
     width: 8,
     height: 8,
-    backgroundColor: '#FFA500',
     borderRadius: 4,
   },
   supplierInfo: {
@@ -443,8 +620,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Regular',
     marginBottom: 5,
   },
-  tankersText: {
+  availabilityText: {
     fontFamily: 'Montserrat-Regular',
+    marginBottom: 5,
+  },
+  statusText: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusLabel: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 14,
   },
   ratesTitle: {
     fontFamily: 'Montserrat-Medium',
@@ -462,15 +648,25 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 5,
   },
+  rateButtonDisabled: {
+    opacity: 0.5,
+  },
   rateButtonText: {
     color: '#000000',
     fontFamily: 'Montserrat-Medium',
-    fontSize: 12,
+    fontSize: 14,
   },
   ratePrice: {
     color: '#000000',
     fontFamily: 'Montserrat-SemiBold',
-    fontSize: 14,
+    fontSize: 16,
     marginTop: 2,
+  },
+  ratePerLiter: {
+    color: '#000000',
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 12,
+    marginTop: 2,
+    opacity: 0.8,
   },
 });

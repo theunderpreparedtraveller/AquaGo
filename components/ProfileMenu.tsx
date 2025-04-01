@@ -1,14 +1,15 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Modal } from 'react-native';
-import { User, Wallet, History, CreditCard, Settings, LogOut, LogIn } from 'lucide-react-native';
+import { User, Wallet, History, CreditCard, Settings, LogOut, LogIn, UserCog } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
-import { useAuth } from '../context/AuthContext';
+import { useSession } from '../context/SessionContext';
+import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function ProfileMenu({ visible, onClose }) {
   const router = useRouter();
-  console.log(userEmail)
-  const { userEmail, signOut } = useAuth();
+  const { session, userEmail } = useSession();
   
   const [fontsLoaded] = useFonts({
     'Montserrat-Regular': Montserrat_400Regular,
@@ -21,26 +22,42 @@ export default function ProfileMenu({ visible, onClose }) {
   }
 
   const menuItems = [
+    { icon: UserCog, label: 'Edit Profile', route: '/edit-profile' },
     { icon: Wallet, label: 'Wallet', route: '/wallet' },
     { icon: History, label: 'Activity History', route: '/activity' },
     { icon: CreditCard, label: 'Payment Methods', route: '/payment-methods' },
     { icon: Settings, label: 'Settings', route: '/settings' },
   ];
 
-  const handleMenuItemPress = (route: string) => {
+  const handleMenuItemPress = (route) => {
     onClose();
     router.push(route);
   };
 
   const handleAuthAction = async () => {
-    if (userEmail) {
-      await signOut();
-      console.log(userEmail)
-      router.replace('/login');
+    if (session) {
+      try {
+        await supabase.auth.signOut();
+        await AsyncStorage.clear();
+        
+        if (typeof window !== 'undefined') {
+          document.cookie.split(';').forEach(cookie => {
+            document.cookie = cookie
+              .replace(/^ +/, '')
+              .replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
+          });
+        }
+        
+        console.log('[Auth]: Successfully cleared all auth data');
+        onClose();
+        router.replace('/login');
+      } catch (error) {
+        console.error('[Auth Error]:', error);
+      }
     } else {
-      router.push('/login');
+      onClose();
+      router.replace('/login');
     }
-    onClose();
   };
 
   return (
@@ -61,11 +78,11 @@ export default function ProfileMenu({ visible, onClose }) {
               <User size={32} color="#FFA500" />
             </View>
             <Text style={styles.userEmail}>
-              {userEmail || 'Not signed in'}
+              {session ? userEmail : 'Guest User'}
             </Text>
           </View>
 
-          {userEmail && menuItems.map((item, index) => (
+          {session && menuItems.map((item, index) => (
             <TouchableOpacity
               key={index}
               style={styles.menuItem}
@@ -77,18 +94,18 @@ export default function ProfileMenu({ visible, onClose }) {
           ))}
 
           <TouchableOpacity
-            style={styles.authButton}
+            style={[styles.authButton, !session && styles.loginButton]}
             onPress={handleAuthAction}
           >
-            {userEmail ? (
+            {session ? (
               <>
                 <LogOut size={24} color="#000000" />
                 <Text style={styles.authButtonText}>Logout</Text>
               </>
             ) : (
               <>
-                <LogIn size={24} color="#000000" />
-                <Text style={styles.authButtonText}>Login</Text>
+                <LogIn size={24} color="#FFFFFF" />
+                <Text style={[styles.authButtonText, styles.loginButtonText]}>Login</Text>
               </>
             )}
           </TouchableOpacity>
@@ -163,10 +180,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginTop: 20,
   },
+  loginButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#FFA500',
+  },
   authButtonText: {
     marginLeft: 10,
     fontSize: 16,
     color: '#000000',
     fontFamily: 'Montserrat-SemiBold',
+  },
+  loginButtonText: {
+    color: '#FFFFFF',
   },
 });
