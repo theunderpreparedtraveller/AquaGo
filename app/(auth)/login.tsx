@@ -8,6 +8,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const [fontsLoaded] = useFonts({
@@ -22,6 +23,9 @@ export default function Login() {
 
   const handleLogin = async () => {
     try {
+      setLoading(true);
+      setError('');
+
       if (!email || !password) {
         const errorMsg = 'Please fill in all fields';
         console.error('[Login Error]:', errorMsg);
@@ -51,6 +55,8 @@ export default function Login() {
       const errorMsg = err instanceof Error ? err.message : 'An unexpected error occurred';
       console.error('[Login Error]:', errorMsg);
       setError(errorMsg);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -69,6 +75,7 @@ export default function Login() {
           onChangeText={setEmail}
           keyboardType="email-address"
           autoCapitalize="none"
+          editable={!loading}
         />
         
         <TextInput
@@ -78,12 +85,17 @@ export default function Login() {
           value={password}
           onChangeText={setPassword}
           secureTextEntry
+          editable={!loading}
         />
 
-        <Text style={styles.orText}>Or login via OTP</Text>
-
-        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-          <Text style={styles.loginButtonText}>LOG IN</Text>
+        <TouchableOpacity 
+          style={[styles.loginButton, loading && styles.loginButtonDisabled]} 
+          onPress={handleLogin}
+          disabled={loading}
+        >
+          <Text style={styles.loginButtonText}>
+            {loading ? 'LOGGING IN...' : 'LOG IN'}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.signupContainer}>
@@ -131,18 +143,15 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Montserrat-Regular',
   },
-  orText: {
-    color: '#666',
-    textAlign: 'center',
-    marginVertical: 15,
-    fontFamily: 'Montserrat-Regular',
-  },
   loginButton: {
     backgroundColor: '#FFA500',
     borderRadius: 8,
     padding: 15,
     alignItems: 'center',
     marginTop: 10,
+  },
+  loginButtonDisabled: {
+    opacity: 0.7,
   },
   loginButtonText: {
     color: '#000000',

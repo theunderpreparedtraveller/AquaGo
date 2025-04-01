@@ -1,9 +1,8 @@
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { 
   StyleSheet, 
   View, 
   Text, 
-  TextInput, 
   ScrollView, 
   TouchableOpacity, 
   Dimensions, 
@@ -11,13 +10,31 @@ import {
   BackHandler,
 } from 'react-native';
 import * as Location from 'expo-location';
-import { Search, MapPin, Sun, Moon, User, Truck } from 'lucide-react-native';
+import { Search, MapPin, Sun, Moon, User } from 'lucide-react-native';
 import { useFonts, Montserrat_300Light, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
 import { useTheme } from '../../context/ThemeContext';
-import ProfileMenu from '../../components/ProfileMenu';
+import { useRouter } from 'expo-router';
 import SearchOverlay from '../../components/SearchOverlay';
+import ProfileMenu from '../../components/ProfileMenu';
+import { supabase } from '../../lib/supabase';
+import WaterVolumeModal from '../../components/WaterVolumeModal';
 
 const { height } = Dimensions.get('window');
+
+interface WaterContainer {
+  id: string;
+  name: string;
+  location: string;
+  address: string;
+  capacity: number;
+  available_volume: number;
+  is_online: boolean;
+  rates: Array<{
+    volume: number;
+    price: number;
+  }>;
+  distance?: number;
+}
 
 const MapView = Platform.select({
   web: () => {
@@ -51,81 +68,64 @@ const MapView = Platform.select({
   },
   default: () => {
     try {
-      const Map = require('react-native-maps').default;
-      return function NativeMap({ style, currentLocation, selectedLocation }) {
-        if (!Map) return null;
-        
-        const region = selectedLocation ? {
-          latitude: selectedLocation.latitude,
-          longitude: selectedLocation.longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        } : currentLocation ? {
-          latitude: currentLocation.coords.latitude,
-          longitude: currentLocation.coords.longitude,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
-        } : {
-          latitude: 12.9716,
-          longitude: 77.5946,
-          latitudeDelta: 0.0922,
-          longitudeDelta: 0.0421,
+      // Only import react-native-maps on native platforms
+      if (Platform.OS !== 'web') {
+        const Map = require('react-native-maps').default;
+        return function NativeMap({ style, currentLocation, selectedLocation }) {
+          if (!Map) return null;
+          
+          const region = selectedLocation ? {
+            latitude: selectedLocation.latitude,
+            longitude: selectedLocation.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          } : currentLocation ? {
+            latitude: currentLocation.coords.latitude,
+            longitude: currentLocation.coords.longitude,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          } : {
+            latitude: 12.9716,
+            longitude: 77.5946,
+            latitudeDelta: 0.0922,
+            longitudeDelta: 0.0421,
+          };
+          
+          return (
+            <Map
+              style={style}
+              region={region}
+            />
+          );
         };
-        
-        return (
-          <Map
-            style={style}
-            region={region}
-          />
-        );
-      };
+      }
     } catch (e) {
-      return function FallbackMap() {
-        return (
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-            <Text>Map not available</Text>
-          </View>
-        );
-      };
+      console.error('Error loading map:', e);
     }
+    return function FallbackMap() {
+      return (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text>Map not available</Text>
+        </View>
+      );
+    };
   },
 })();
 
 export default function Home() {
+  const router = useRouter();
   const { isDarkMode, toggleTheme } = useTheme();
   const [location, setLocation] = useState(null);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showSearchOverlay, setShowSearchOverlay] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [containers, setContainers] = useState<WaterContainer[]>([]);
+  const [loading, setLoading] = useState(true);
   const mapRef = useRef(null);
-
-  const [suppliers] = useState([
-    {
-      id: 1,
-      name: 'Metro Water Services',
-      distance: '2083.9',
-      availableTankers: 3,
-      busyTankers: 1,
-      rates: [
-        { liters: 1000, price: 450, label: '1000L' },
-        { liters: 2000, price: 750, label: '2000L' },
-        { liters: 5000, price: 1100, label: '5000L' }
-      ]
-    },
-    {
-      id: 2,
-      name: 'City Water Supply',
-      distance: '2084.0',
-      availableTankers: 5,
-      busyTankers: 2,
-      rates: [
-        { liters: 1000, price: 500, label: '1000L' },
-        { liters: 2000, price: 800, label: '2000L' },
-        { liters: 5000, price: 1200, label: '5000L' }
-      ]
-    }
-  ]);
+  const [defaultAddress, setDefaultAddress] = useState(null);
+  const [showVolumeModal, setShowVolumeModal] = useState(false);
+  const [selectedContainer, setSelectedContainer] = useState(null);
 
   const [fontsLoaded] = useFonts({
     'Montserrat-Light': Montserrat_300Light,
@@ -133,6 +133,102 @@ export default function Home() {
     'Montserrat-Medium': Montserrat_500Medium,
     'Montserrat-SemiBold': Montserrat_600SemiBold,
   });
+
+  useEffect(() => {
+    fetchContainers();
+    
+    // Subscribe to real-time updates
+    const subscription = supabase
+      .channel('water_containers')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'water_containers'
+      }, (payload) => {
+        console.log('Real-time update:', payload);
+        fetchContainers();
+      })
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    const fetchDefaultAddress = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data, error } = await supabase
+          .from('user_addresses')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('is_default', true)
+          .single();
+
+        if (error) throw error;
+        if (data) {
+          const pointStr = data.location.slice(1, -1).split(',');
+          setDefaultAddress({
+            ...data,
+            coordinates: {
+              longitude: parseFloat(pointStr[0]),
+              latitude: parseFloat(pointStr[1])
+            }
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching default address:', error);
+      }
+    };
+
+    fetchDefaultAddress();
+  }, []);
+
+  const fetchContainers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('water_containers')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+
+      const containersWithDistance = data.map(container => {
+        const pointStr = container.location.slice(1, -1).split(',');
+        const containerLocation = {
+          longitude: parseFloat(pointStr[0]),
+          latitude: parseFloat(pointStr[1])
+        };
+
+        let distance = 0;
+        if (defaultAddress?.coordinates) {
+          // Calculate distance from default address instead of current location
+          distance = calculateDistance(
+            defaultAddress.coordinates.latitude,
+            defaultAddress.coordinates.longitude,
+            containerLocation.latitude,
+            containerLocation.longitude
+          );
+        }
+
+        return {
+          ...container,
+          distance: distance
+        };
+      });
+
+      // Sort by distance
+      containersWithDistance.sort((a, b) => a.distance - b.distance);
+      setContainers(containersWithDistance);
+    } catch (error) {
+      console.error('Error fetching containers:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -143,6 +239,7 @@ export default function Home() {
 
       let location = await Location.getCurrentPositionAsync({});
       setLocation(location);
+      fetchContainers();
     })();
   }, []);
 
@@ -161,6 +258,22 @@ export default function Home() {
 
     return () => backHandler.remove();
   }, [showSearchOverlay, showProfileMenu]);
+
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371;
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const deg2rad = (deg) => {
+    return deg * (Math.PI/180);
+  };
 
   const handleLocationSelect = async (suggestion) => {
     if (suggestion.type === 'current') {
@@ -207,6 +320,21 @@ export default function Home() {
       console.error("Error getting location:", error);
       alert("Failed to get location. Please check your GPS settings.");
     }
+  };
+
+  const handleRateSelect = (container, rate) => {
+    if (!container.is_online) return;
+    
+    console.log('[Container Selection]:', {
+      container: container.id,
+      rate: rate
+    });
+    
+    setSelectedContainer({
+      ...container,
+      selectedRate: rate
+    });
+    setShowVolumeModal(true);
   };
 
   if (!fontsLoaded || !location) {
@@ -274,34 +402,53 @@ export default function Home() {
             Showing suppliers near your location
           </Text>
 
-          {suppliers.map((supplier) => (
-            <View key={supplier.id} style={[styles.supplierCard, { backgroundColor: cardBgColor }]}>
+          {loading ? (
+            <Text style={[styles.loadingText, { color: subtitleColor }]}>
+              Loading suppliers...
+            </Text>
+          ) : containers.map((container) => (
+            <View key={container.id} style={[styles.supplierCard, { backgroundColor: cardBgColor }]}>
               <View style={styles.supplierHeader}>
                 <Text style={[styles.supplierName, { color: textColor }]}>
-                  {supplier.name}
+                  {container.name}
                 </Text>
-                <View style={styles.dropIcon} />
+                <View style={[styles.statusIndicator, { 
+                  backgroundColor: container.is_online ? '#4CAF50' : '#FF3B30' 
+                }]} />
               </View>
               
               <View style={styles.supplierInfo}>
                 <Text style={[styles.distanceText, { color: subtitleColor }]}>
-                  📍 {supplier.distance} km away
+                  📍 {container.distance.toFixed(1)} km away
                 </Text>
-                <Text style={[styles.tankersText, { color: subtitleColor }]}>
-                  Available Tankers: {supplier.availableTankers}
+                <Text style={[styles.availabilityText, { color: subtitleColor }]}>
+                  Available Volume: {container.available_volume.toLocaleString()}L / {container.capacity.toLocaleString()}L
                 </Text>
+                <View style={styles.statusText}>
+                  <Text style={[styles.statusLabel, { color: container.is_online ? '#4CAF50' : '#FF3B30' }]}>
+                    {container.is_online ? '● Online' : '● Offline'}
+                  </Text>
+                </View>
               </View>
 
               <Text style={[styles.ratesTitle, { color: textColor }]}>
                 Water Volume & Rates:
               </Text>
               <View style={styles.ratesContainer}>
-                {supplier.rates.map((rate, index) => (
-                  <TouchableOpacity key={index} style={styles.rateButton}>
-                    <Text style={styles.rateButtonText}>{rate.label}</Text>
+                {container.rates.map((rate, index) => (
+                  <TouchableOpacity 
+                    key={index} 
+                    style={[
+                      styles.rateButton,
+                      !container.is_online && styles.rateButtonDisabled
+                    ]}
+                    onPress={() => handleRateSelect(container, rate)}
+                    disabled={!container.is_online}
+                  >
+                    <Text style={styles.rateButtonText}>{rate.volume}L</Text>
                     <Text style={styles.ratePrice}>₹{rate.price}</Text>
                     <Text style={styles.ratePerLiter}>
-                      (₹{(rate.price / rate.liters).toFixed(2)}/L)
+                      (₹{(rate.price / rate.volume).toFixed(2)}/L)
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -311,6 +458,24 @@ export default function Home() {
         </ScrollView>
       </View>
 
+      {selectedContainer && (
+        <WaterVolumeModal
+          visible={showVolumeModal}
+          onClose={() => {
+            console.log('[Modal]: Closing modal');
+            setShowVolumeModal(false);
+            setSelectedContainer(null);
+          }}
+          onSuccess={() => {
+            console.log('[Modal]: Order successful');
+            setShowVolumeModal(false);
+            setSelectedContainer(null);
+            fetchContainers(); // Refresh containers after order
+          }}
+          selectedContainer={selectedContainer}
+        />
+      )}
+
       <SearchOverlay
         visible={showSearchOverlay}
         onClose={() => setShowSearchOverlay(false)}
@@ -319,7 +484,7 @@ export default function Home() {
         onLocationSelect={handleLocationSelect}
       />
 
-      <ProfileMenu 
+      <ProfileMenu
         visible={showProfileMenu}
         onClose={() => setShowProfileMenu(false)}
       />
@@ -386,28 +551,6 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  currentLocationMarker: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(37, 99, 235, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  currentLocationDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#2563eb',
-  },
-  supplierMarker: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 165, 0, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   bottomSheet: {
     height: height * 0.45,
     borderTopLeftRadius: 20,
@@ -444,6 +587,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Regular',
     marginBottom: 20,
   },
+  loadingText: {
+    textAlign: 'center',
+    fontFamily: 'Montserrat-Regular',
+    fontSize: 16,
+    marginTop: 20,
+  },
   supplierCard: {
     borderRadius: 12,
     padding: 15,
@@ -459,10 +608,9 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'Montserrat-SemiBold',
   },
-  dropIcon: {
+  statusIndicator: {
     width: 8,
     height: 8,
-    backgroundColor: '#FFA500',
     borderRadius: 4,
   },
   supplierInfo: {
@@ -472,8 +620,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Montserrat-Regular',
     marginBottom: 5,
   },
-  tankersText: {
+  availabilityText: {
     fontFamily: 'Montserrat-Regular',
+    marginBottom: 5,
+  },
+  statusText: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusLabel: {
+    fontFamily: 'Montserrat-Medium',
+    fontSize: 14,
   },
   ratesTitle: {
     fontFamily: 'Montserrat-Medium',
@@ -490,6 +647,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     marginHorizontal: 5,
+  },
+  rateButtonDisabled: {
+    opacity: 0.5,
   },
   rateButtonText: {
     color: '#000000',
