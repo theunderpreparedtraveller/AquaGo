@@ -1,0 +1,129 @@
+Create a app which works like uber, dominos in Aqua theme. It starts with a login or register screen for first time and allows login via Google or phone number OTP. If already logged in, it should directly go to home page. The home page allows user to select current location on the top bar via gps location, and also has further options to select recent location and default home address when user clicks on it to select on Map and type location manually by pinning location on map and it should provide location suggestions via Open Street Map. Now, just below the location bar in home page it has nearby outlets showing in nearby locations and with different rates of tankers. it should make easy to get tanker fastest and see ETA based on total number of tanker in one outlet and how may tankers currently serving because it will have the live location of tankers as well. It should show tanker icon based on the capacity of water it has. Now once user the desired tanker size supplied it should redirect to confirm the order by payment and showing live details and tracking after confirming the details.
+
+Apart from these make sure you add a Profile icon in bottom right. The profile page allows users to customize the name, email, and home address apart from general settings.
+
+The map widget is always on top and hides the popup and suggestions behind it..please fix and make sure app works smoothly
+
+Three things:
+It is not showing search suggestions....
+Not able to select and proceed with Water supply
+the profile page mentioned in earlier prompt is still missing
+please fix these
+
+Add you orders icon near profile icon from which we can get all orders and detaiils including name and  contact number of the tanker driver, OTP and GPS route with live tracking.
+
+Also, change the icons shown in the map for location to identify the tanker and customer selected location...the map should have a feature to pin the location manually.
+
+Location pinning should allow moving the map and the pin icon will be in the center so the user can easily calibrate the correct location. Also use different icon for tanker location and different icon for customer location.
+
+While confirming the location it show the path in the map on how the tanker will travel. Also, there should be a button to cancel order within 1 minute timeframe.
+
+Before order gets confirmed it should redirect to payment page where it takes payment via UPI or credit card.
+
+Also nothing happens after we click 'continue' in pin location on map. please fix that.
+It doesn't show the route correctly...instead of showing the paths through the roads, it shows direct path as a straight line which doesn't make any sense..please fix the route mapping
+
+Based on the location given by the user it should show the suppliers list. It should show the nearest supplier available. And it should show the contact driver option.
+
+In profile section, it should show It should show the wallet option, activity history, default payment settings, and other useful things... And every page mentioned should work as there title defines.
+
+Also fix the route showing functionality, it should first show the route then confirm booking page after selecting the supplier.
+
+Please integrate the map which shows the route in the popup as step 1 and step 2 will be the payment part in confirm booking.
+
+The original location selection map should be behind the booking popup, but it is on top of that. Please fix that.
+Also, where orders are 0, we do not need the red 0 on order icon on top. Make sure it shows the count of current ongoing number of orders.
+- While booking give an option to schedule the orders.
+- The price should also vary based on distance... show the bill including the charges for water and delivery.
+Please also fix the add money feature in wallet page. It is not working.
+
+- Add dark mode button in app which works on all pages.
+- Add a logout button on profile page.
+- Generate and add relevant terms & conditions page which user can view while signing in.
+- Generate about and contact page for the app
+- the dark mode and notification button from the settings page is not working
+
+- when the user click search bar and the keyboard pops out for the user keep the Nearby water suppliers drop menu down.
+It is still not fixed. How about making a separate page on top when user clicks search only the suggestions comes from which user can choose and rest everything fades away
+The search bar is not giving location suggestion as user types the address from maps
+when user tries to go back it should remove the search overlay instead of exiting the app
+
+(The location search suggestion is displayed correctly and only one suggestion is given...please fix that to show all suggestions as scrollable keeping the search bar at same location...)
+- For the wallet, activity history, payment methods, settings page,etc. keep margin from top until the notification bar, the content should remain inside the screen and not in the notification bar
+When the user is selecting tanker add a option to choose litre of water and for different sizes define the litre offered
+
+( *requires gmaps* The map should show the current location of user and pinned with small blue circle icon and the tanker locations with tanker icon.)
+
+- the tanker price should be according to the litres of water with minimum 1000 litre
+- remove the bottom bar and in the profile page add update profile button and where user can change the photo, name, phone number, address, contact, etc.
+- Clicking on the profile icon here should take to complete profile page not just the overlay
+remove the bottom bar and in the profile page add update profile button and where user can change the photo, name, phone number, address, contact, etc.
+- Add full functionality to add money from upi to wallet in wallet page
+
+- Add a proper session handling feature. The page should not show only not signed in and login when the user is not signed in. The menus like wallet,activity history,payment methods should be visible after login
+add a session handling. After logging in it should have a proper session token that can be accessed from all the pages. Also store the email so that it can be accessed from all the pages
+depending on the user signin status change the logout button to login/logout. dont change anything else
+delete all authentication data after logout
+
+- Make container details dynamic add required sample data in database for 5 containers... Get the containers and details dynamically from database, they should have online status as well in addition to other data we currently have
+
+- make sure container data is updated in real time. Alsom the distance is shown from selected home address.
+- Append an entry near wallet, activity history, payment method, settings, etc. menu items to edit profile.
+- Make user wallet, activity history, payment method, settings dynamic and respective to user session...Add sample data in database
+
+- add checkout flow for tanker, once the user click particular container and size...it should include the payment flow and add notification and container locations estimated time to reach....still its not working...make proper checkout flow as user chooses the tanker
+add proper error handling for:
+- error fetching wallet details then option to add money to wallet
+- error fetching delivery address, then add option to add delivery address from gps or use custom address
+
+- When we select a water tanker, it shows Water Volume text and nothing else...please fix the flow safely here
+The Water Volume page is not in the visible area please make it scrollable or remove the margin to start the page just below the notification area
+once user select water volume proceed to address page where user can choose from maps or use saved address and then payment page where user can choose to pay from wallet or UPI or cash. After the order is successfully places offer an option to cancel the order within 60 seconds...make safe changes and all errors should have proper handling from user's point of view
+It is not handling payment correctly while checkout, gives error in every payment method and order is not placed
+One payment is done: add the transactions in Recent Transactions list...which is loaded from the database
+
+- when a order is made add the transaction in the same "Recent Transactions" also make sure to remove it if the order is cancelled
+Similarly make safe changes in code and database to add detailed updates in "Activity History"
+
+- add a realtime check page for alerts (after login) if:
+	- location is turned off or permission is not given
+	- profile information like name, address, etc.
+	- if not, instruct user to do the same....and when its on again make sure you remove 
+
+add a column in water_containers table for contact number, and add a option in activity history to call the supplier also add chat feature with the tanker supplier
+Add an option to call or chat with the supplier and make the functionality work....it should be also visible with Activity History
+
+make safe changes and sure saved_locations are loaded from user_addresses table from the database...also recent_locations are also dynamically added and loaded from database...make safe changes
+In activity.tsx make safe changes so user can select a activity history and a new overlay comes in which user can decide to chat or call supplier (opens phone dialer) and request cancellation as well
+
+----
+# manual
+
+- add payment gateway 
+- Add the attached logo in login/signup page, activityhistory, home/order page...add logo while making safe changes in code
+- add google authentication in sign in and sign up
+
+how to build apk in expo and use supabase database?
+
+
+
+
+
+------------
+
+# check desk notes - handwritten
+
+Create a mobile app which captures live IR sensor data from Android phone and shows in the dashboard.
+
+- App should be able to run in background
+- When the device is offline the app should continue to capture the data and once it is connected to server it should sync the log data
+- App should autostart on device startup as Adblocker/NetGuard apps
+- the Server should define what data to record and should be manageble remotely
+- When certain conditions meat the app also should be able to record more data in situation on emergency
+
+
+--------------------
+
+Create a anti-theft mobile app with expo which allows user to select other bluetooth devices available and pair to the device. Now, if that device is not visible via bluetooth that means it was stolen. In that case the app should pop alerts in your phone and make sounds. There should also be a button on app to pause resume or reset this functionality. User should be able to change settings for alerts for custom sound, volume and message.
+
+--------------------
