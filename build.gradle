@@ -1,0 +1,21 @@
+android {
+    compileSdkVersion 35 // or your target SDK version
+    buildToolsVersion "35.0.0" // match with compileSdkVersion
+    
+    defaultConfig {
+        // ... other configs
+        targetSdkVersion 35
+        minSdkVersion 23 // or your minimum supported version
+    }
+}
+buildscript {
+    ext {
+        // Ensure these versions are compatible
+        kotlinVersion = "1.9.0" // or latest stable
+        gradlePluginVersion = "8.1.0" // or latest stable
+    }
+    dependencies {
+        classpath "com.android.tools.build:gradle:$gradlePluginVersion"
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
+    }
+}

@@ -1,24 +1,50 @@
-// Previous imports remain the same...
+import { useState, useEffect } from 'react';
+import {
+  StyleSheet,
+  Modal,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  Platform,
+  StatusBar,
+  SafeAreaView,
+} from 'react-native';
+import { X } from 'lucide-react-native';
+import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
+import { supabase } from '../lib/supabase';
+import DeliveryAddressModal from './DeliveryAddressModal';
+import PaymentModal from './PaymentModal';
+import OrderConfirmationModal from './OrderConfirmationModal';
 
-export default function WaterVolumeModal({ visible, onClose, onSuccess, selectedContainer }) {
-  console.log('[Modal]: Initializing with container:', selectedContainer);
+const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
 
-  const [step, setStep] = useState(1);
+interface WaterVolumeModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  selectedContainer: {
+    id: string;
+    name: string;
+    available_volume: number;
+    rates: Array<{
+      volume: number;
+      price: number;
+    }>;
+  } | null;
+}
+
+export default function WaterVolumeModal({ visible, onClose, onSuccess, selectedContainer }: WaterVolumeModalProps) {
+  const [selectedVolume, setSelectedVolume] = useState<string>('');
+  const [selectedPrice, setSelectedPrice] = useState<number>(0);
   const [loading, setLoading] = useState(false);
-  const [scheduledDate, setScheduledDate] = useState(new Date());
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [walletBalance, setWalletBalance] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState('wallet');
-  const [defaultAddress, setDefaultAddress] = useState(null);
-  const [showAddMoney, setShowAddMoney] = useState(false);
-  const [moneyAmount, setMoneyAmount] = useState('');
-  const [showAddAddress, setShowAddAddress] = useState(false);
-  const [newAddress, setNewAddress] = useState({
-    title: '',
-    address: '',
-    location: null,
-  });
-  const [loadingLocation, setLoadingLocation] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [orderId, setOrderId] = useState<string | null>(null);
+  const [selectedAddress, setSelectedAddress] = useState<any>(null);
 
   const [fontsLoaded] = useFonts({
     'Montserrat-Regular': Montserrat_400Regular,
@@ -27,205 +53,177 @@ export default function WaterVolumeModal({ visible, onClose, onSuccess, selected
   });
 
   useEffect(() => {
-    if (visible && selectedContainer) {
-      console.log('[Modal]: Modal opened with container:', selectedContainer.id);
-      fetchWalletBalance();
-      fetchDefaultAddress();
-      setStep(1);
-      setScheduledDate(new Date());
-      setShowAddMoney(false);
-      setShowAddAddress(false);
+    if (visible) {
+      setSelectedVolume('');
+      setSelectedPrice(0);
+      setError(null);
+      setSelectedAddress(null);
     }
-  }, [visible, selectedContainer]);
+  }, [visible]);
 
-  // Previous functions remain the same...
+  const handleVolumeSelect = (volume: string, price: number) => {
+    setSelectedVolume(volume);
+    setSelectedPrice(price);
+    setError(null);
+    setShowAddressModal(true);
+  };
 
-  if (!fontsLoaded) {
-    console.log('[Modal]: Fonts not loaded');
-    return null;
-  }
+  const handleAddressSelect = async (address: any) => {
+    setSelectedAddress(address);
+    setShowAddressModal(false);
+    setShowPaymentModal(true);
+  };
 
-  if (!selectedContainer) {
-    console.log('[Modal]: No container data provided');
+  const handlePaymentComplete = async (paymentMethod: string, paymentDetails?: any) => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!selectedContainer || !selectedAddress) {
+        throw new Error('Missing required information');
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      // Create point from coordinates
+      const location = selectedAddress.location || '(0,0)';
+
+      // Create delivery order
+      const { data: orderId, error: orderError } = await supabase.rpc('create_water_delivery', {
+        p_user_id: user.id,
+        p_container_id: selectedContainer.id,
+        p_volume: parseInt(selectedVolume, 10),
+        p_amount: selectedPrice,
+        p_delivery_address: selectedAddress.address,
+        p_delivery_location: location,
+        p_payment_method: paymentMethod,
+        p_payment_details: paymentDetails
+      });
+
+      if (orderError) throw orderError;
+
+      setOrderId(orderId);
+      setShowPaymentModal(false);
+      setShowConfirmationModal(true);
+    } catch (error) {
+      console.error('[Order Error]:', error);
+      setError(error instanceof Error ? error.message : 'Failed to create order');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleConfirmationClose = () => {
+    setShowConfirmationModal(false);
+    onSuccess();
+    onClose();
+  };
+
+  if (!fontsLoaded || !selectedContainer) {
     return null;
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <View style={styles.overlay}>
-        <View style={styles.modal}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Water Delivery</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <X size={24} color="#666" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView style={styles.content}>
-            {/* Container Details */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Selected Container</Text>
-              <View style={styles.containerInfo}>
-                <Text style={styles.containerName}>{selectedContainer.name}</Text>
-                <Text style={styles.containerDetail}>
-                  Volume: {selectedContainer.selectedRate.volume}L
-                </Text>
-                <Text style={styles.containerDetail}>
-                  Price: ₹{selectedContainer.selectedRate.price}
-                </Text>
-              </View>
-            </View>
-
-            {/* Delivery Address */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Delivery Address</Text>
-              {defaultAddress ? (
-                <View style={styles.addressCard}>
-                  <Text style={styles.addressTitle}>{defaultAddress.title}</Text>
-                  <Text style={styles.addressText}>{defaultAddress.address}</Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  style={styles.addAddressButton}
-                  onPress={() => setShowAddAddress(true)}
-                >
-                  <Plus size={24} color="#FFA500" />
-                  <Text style={styles.addAddressText}>Add Delivery Address</Text>
+    <>
+      <Modal
+        visible={visible}
+        transparent
+        animationType="slide"
+        onRequestClose={onClose}
+      >
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.overlay}>
+            <View style={styles.modal}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Select Water Volume</Text>
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <X size={24} color="#666" />
                 </TouchableOpacity>
-              )}
-            </View>
+              </View>
 
-            {/* Add Address Form */}
-            {showAddAddress && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Add New Address</Text>
-                <View style={styles.form}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Address Title (e.g., Home, Office)"
-                    placeholderTextColor="#666"
-                    value={newAddress.title}
-                    onChangeText={(text) => setNewAddress({ ...newAddress, title: text })}
-                  />
-                  <View style={styles.addressInputContainer}>
-                    <TextInput
-                      style={styles.addressInput}
-                      placeholder="Full Address"
-                      placeholderTextColor="#666"
-                      value={newAddress.address}
-                      onChangeText={(text) => setNewAddress({ ...newAddress, address: text })}
-                      multiline
-                    />
+              <ScrollView 
+                style={styles.content}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.contentContainer}
+              >
+                <View style={styles.containerInfo}>
+                  <Text style={styles.containerName}>{selectedContainer.name}</Text>
+                  <Text style={styles.availableVolume}>
+                    Available: {selectedContainer.available_volume.toLocaleString()}L
+                  </Text>
+                </View>
+
+                <View style={styles.volumeOptions}>
+                  {selectedContainer.rates.map((rate, index) => (
                     <TouchableOpacity
-                      style={styles.locationButton}
-                      onPress={getCurrentLocation}
-                      disabled={loadingLocation}
+                      key={index}
+                      style={[
+                        styles.volumeOption,
+                        selectedVolume === rate.volume.toString() && styles.volumeOptionSelected
+                      ]}
+                      onPress={() => handleVolumeSelect(rate.volume.toString(), rate.price)}
                     >
-                      {loadingLocation ? (
-                        <ActivityIndicator color="#FFA500" />
-                      ) : (
-                        <Navigation size={24} color="#FFA500" />
-                      )}
+                      <Text style={[
+                        styles.volumeText,
+                        selectedVolume === rate.volume.toString() && styles.volumeTextSelected
+                      ]}>
+                        {rate.volume.toLocaleString()}L
+                      </Text>
+                      <Text style={[
+                        styles.priceText,
+                        selectedVolume === rate.volume.toString() && styles.priceTextSelected
+                      ]}>
+                        ₹{rate.price}
+                      </Text>
+                      <Text style={[
+                        styles.rateText,
+                        selectedVolume === rate.volume.toString() && styles.rateTextSelected
+                      ]}>
+                        (₹{(rate.price / rate.volume).toFixed(2)}/L)
+                      </Text>
                     </TouchableOpacity>
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-                    onPress={handleAddAddress}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#000000" />
-                    ) : (
-                      <Text style={styles.saveButtonText}>Save Address</Text>
-                    )}
-                  </TouchableOpacity>
+                  ))}
                 </View>
-              </View>
-            )}
 
-            {/* Payment Method */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Payment Method</Text>
-              <View style={styles.paymentOptions}>
-                <TouchableOpacity
-                  style={[
-                    styles.paymentOption,
-                    paymentMethod === 'wallet' && styles.paymentOptionSelected
-                  ]}
-                  onPress={() => setPaymentMethod('wallet')}
-                >
-                  <Wallet size={24} color={paymentMethod === 'wallet' ? '#FFA500' : '#666'} />
-                  <View style={styles.paymentOptionInfo}>
-                    <Text style={styles.paymentOptionTitle}>Wallet</Text>
-                    <Text style={styles.walletBalance}>Balance: ₹{walletBalance}</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              {paymentMethod === 'wallet' && walletBalance < selectedContainer.selectedRate.price && (
-                <TouchableOpacity
-                  style={styles.addMoneyButton}
-                  onPress={() => setShowAddMoney(true)}
-                >
-                  <Plus size={20} color="#FFA500" />
-                  <Text style={styles.addMoneyText}>Add Money to Wallet</Text>
-                </TouchableOpacity>
-              )}
+                {error && (
+                  <Text style={styles.errorText}>{error}</Text>
+                )}
+              </ScrollView>
             </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
-            {/* Add Money Form */}
-            {showAddMoney && (
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Add Money to Wallet</Text>
-                <View style={styles.form}>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter Amount"
-                    placeholderTextColor="#666"
-                    value={moneyAmount}
-                    onChangeText={setMoneyAmount}
-                    keyboardType="numeric"
-                  />
-                  <TouchableOpacity
-                    style={[styles.saveButton, loading && styles.saveButtonDisabled]}
-                    onPress={handleAddMoney}
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#000000" />
-                    ) : (
-                      <Text style={styles.saveButtonText}>Add Money</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
+      <DeliveryAddressModal
+        visible={showAddressModal}
+        onClose={() => setShowAddressModal(false)}
+        onAddressSelect={handleAddressSelect}
+      />
 
-            {/* Confirm Order Button */}
-            <TouchableOpacity
-              style={[styles.confirmButton, loading && styles.confirmButtonDisabled]}
-              onPress={handleConfirmOrder}
-              disabled={loading || !defaultAddress || (paymentMethod === 'wallet' && walletBalance < selectedContainer.selectedRate.price)}
-            >
-              {loading ? (
-                <ActivityIndicator color="#000000" />
-              ) : (
-                <Text style={styles.confirmButtonText}>Confirm Order</Text>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+      <PaymentModal
+        visible={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        onPaymentComplete={handlePaymentComplete}
+        amount={selectedPrice}
+      />
+
+      {orderId && (
+        <OrderConfirmationModal
+          visible={showConfirmationModal}
+          onClose={handleConfirmationClose}
+          orderId={orderId}
+        />
+      )}
+    </>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -235,15 +233,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1f2b',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '90%',
+    height: '90%',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2E',
+    borderBottomColor: '#242430',
   },
   title: {
     fontSize: 24,
@@ -259,172 +259,71 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   content: {
+    flex: 1,
+  },
+  contentContainer: {
     padding: 20,
   },
-  section: {
-    marginBottom: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    color: '#FFFFFF',
-    fontFamily: 'Montserrat-SemiBold',
-    marginBottom: 10,
-  },
   containerInfo: {
-    backgroundColor: '#242430',
+    marginBottom: 20,
     padding: 15,
+    backgroundColor: '#242430',
     borderRadius: 12,
   },
   containerName: {
     fontSize: 18,
     color: '#FFFFFF',
     fontFamily: 'Montserrat-SemiBold',
-    marginBottom: 5,
+    marginBottom: 8,
   },
-  containerDetail: {
-    fontSize: 16,
-    color: '#666',
-    fontFamily: 'Montserrat-Regular',
-  },
-  addressCard: {
-    backgroundColor: '#242430',
-    padding: 15,
-    borderRadius: 12,
-  },
-  addressTitle: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontFamily: 'Montserrat-SemiBold',
-    marginBottom: 5,
-  },
-  addressText: {
+  availableVolume: {
     fontSize: 14,
     color: '#666',
     fontFamily: 'Montserrat-Regular',
   },
-  addAddressButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  volumeOptions: {
+    marginBottom: 20,
+  },
+  volumeOption: {
     backgroundColor: '#242430',
-    padding: 15,
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FFA500',
-    borderStyle: 'dashed',
-  },
-  addAddressText: {
-    color: '#FFA500',
-    fontSize: 16,
-    fontFamily: 'Montserrat-Medium',
-    marginLeft: 10,
-  },
-  form: {
-    backgroundColor: '#242430',
     padding: 15,
-    borderRadius: 12,
-  },
-  input: {
-    backgroundColor: '#1a1f2b',
-    borderRadius: 8,
-    padding: 12,
-    color: '#FFFFFF',
-    fontFamily: 'Montserrat-Regular',
     marginBottom: 10,
-  },
-  addressInputContainer: {
-    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
   },
-  addressInput: {
-    flex: 1,
-    backgroundColor: '#1a1f2b',
-    borderRadius: 8,
-    padding: 12,
+  volumeOptionSelected: {
+    backgroundColor: 'rgba(255, 165, 0, 0.2)',
+  },
+  volumeText: {
     color: '#FFFFFF',
-    fontFamily: 'Montserrat-Regular',
-    marginRight: 10,
-  },
-  locationButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 165, 0, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveButton: {
-    backgroundColor: '#FFA500',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  saveButtonDisabled: {
-    opacity: 0.7,
-  },
-  saveButtonText: {
-    color: '#000000',
-    fontSize: 16,
+    fontSize: 20,
     fontFamily: 'Montserrat-SemiBold',
+    marginBottom: 4,
   },
-  paymentOptions: {
-    backgroundColor: '#242430',
-    borderRadius: 12,
-    overflow: 'hidden',
-  },
-  paymentOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2E',
-  },
-  paymentOptionSelected: {
-    backgroundColor: 'rgba(255, 165, 0, 0.1)',
-  },
-  paymentOptionInfo: {
-    marginLeft: 15,
-  },
-  paymentOptionTitle: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    fontFamily: 'Montserrat-Medium',
-  },
-  walletBalance: {
-    fontSize: 14,
-    color: '#666',
-    fontFamily: 'Montserrat-Regular',
-    marginTop: 2,
-  },
-  addMoneyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 165, 0, 0.1)',
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  addMoneyText: {
+  volumeTextSelected: {
     color: '#FFA500',
-    fontSize: 14,
-    fontFamily: 'Montserrat-Medium',
-    marginLeft: 5,
   },
-  confirmButton: {
-    backgroundColor: '#FFA500',
-    borderRadius: 12,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-  confirmButtonDisabled: {
-    opacity: 0.7,
-  },
-  confirmButtonText: {
-    color: '#000000',
+  priceText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    fontFamily: 'Montserrat-SemiBold',
+    fontFamily: 'Montserrat-Medium',
+    marginBottom: 2,
+  },
+  priceTextSelected: {
+    color: '#FFA500',
+  },
+  rateText: {
+    color: '#666',
+    fontSize: 12,
+    fontFamily: 'Montserrat-Regular',
+  },
+  rateTextSelected: {
+    color: 'rgba(255, 165, 0, 0.8)',
+  },
+  errorText: {
+    color: '#FF3B30',
+    fontFamily: 'Montserrat-Regular',
+    marginBottom: 15,
+    textAlign: 'center',
   },
 });

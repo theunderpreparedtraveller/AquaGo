@@ -8,10 +8,19 @@ import AddMoneyModal from '../../../components/AddMoneyModal';
 // Get status bar height
 const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
 
+interface Transaction {
+  id: string;
+  type: 'credit' | 'debit';
+  amount: number;
+  description: string;
+  reference_type: string;
+  created_at: string;
+}
+
 export default function Wallet() {
   const [showAddMoney, setShowAddMoney] = useState(false);
   const [balance, setBalance] = useState(0);
-  const [transactions, setTransactions] = useState([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [fontsLoaded] = useFonts({
@@ -39,17 +48,35 @@ export default function Wallet() {
       if (walletError) throw walletError;
       setBalance(wallet?.balance || 0);
 
-      // Get recent transactions (mock data for now)
-      setTransactions([
-        { id: 1, type: 'credit', amount: 500, description: 'Added money to wallet', date: '2024-03-16' },
-        { id: 2, type: 'debit', amount: 750, description: 'Water tanker payment', date: '2024-03-15' },
-        { id: 3, type: 'credit', amount: 1000, description: 'Refund from cancelled order', date: '2024-03-14' },
-      ]);
+      // Get recent transactions
+      const { data: transactions, error: transactionsError } = await supabase
+        .rpc('get_user_transactions', { p_user_id: user.id, p_limit: 10 });
+
+      if (transactionsError) throw transactionsError;
+      setTransactions(transactions || []);
     } catch (error) {
       console.error('Error fetching wallet data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-IN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
   };
 
   if (!fontsLoaded) {
@@ -73,28 +100,36 @@ export default function Wallet() {
 
         <View style={styles.transactionsContainer}>
           <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          {transactions.map((transaction) => (
-            <View key={transaction.id} style={styles.transactionItem}>
-              <View style={styles.transactionIcon}>
-                {transaction.type === 'credit' ? (
-                  <ArrowDownLeft size={24} color="#4CAF50" />
-                ) : (
-                  <ArrowUpRight size={24} color="#FF3B30" />
-                )}
+          {loading ? (
+            <Text style={styles.messageText}>Loading transactions...</Text>
+          ) : transactions.length === 0 ? (
+            <Text style={styles.messageText}>No transactions yet</Text>
+          ) : (
+            transactions.map((transaction) => (
+              <View key={transaction.id} style={styles.transactionItem}>
+                <View style={styles.transactionIcon}>
+                  {transaction.type === 'credit' ? (
+                    <ArrowDownLeft size={24} color="#4CAF50" />
+                  ) : (
+                    <ArrowUpRight size={24} color="#FF3B30" />
+                  )}
+                </View>
+                <View style={styles.transactionDetails}>
+                  <Text style={styles.transactionDescription}>{transaction.description}</Text>
+                  <Text style={styles.transactionDate}>
+                    {formatDate(transaction.created_at)} • {formatTime(transaction.created_at)}
+                  </Text>
+                </View>
+                <Text
+                  style={[
+                    styles.transactionAmount,
+                    { color: transaction.type === 'credit' ? '#4CAF50' : '#FF3B30' },
+                  ]}>
+                  {transaction.type === 'credit' ? '+' : '-'}₹{transaction.amount}
+                </Text>
               </View>
-              <View style={styles.transactionDetails}>
-                <Text style={styles.transactionDescription}>{transaction.description}</Text>
-                <Text style={styles.transactionDate}>{transaction.date}</Text>
-              </View>
-              <Text
-                style={[
-                  styles.transactionAmount,
-                  { color: transaction.type === 'credit' ? '#4CAF50' : '#FF3B30' },
-                ]}>
-                {transaction.type === 'credit' ? '+' : '-'}₹{transaction.amount}
-              </Text>
-            </View>
-          ))}
+            ))
+          )}
         </View>
       </ScrollView>
 
@@ -157,6 +192,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: 'Montserrat-SemiBold',
     marginBottom: 15,
+  },
+  messageText: {
+    color: '#666',
+    fontSize: 16,
+    fontFamily: 'Montserrat-Regular',
+    textAlign: 'center',
+    marginTop: 20,
   },
   transactionItem: {
     flexDirection: 'row',

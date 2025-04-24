@@ -8,6 +8,7 @@ import Animated, {
   useAnimatedStyle, 
   useSharedValue,
 } from 'react-native-reanimated';
+import { supabase } from '../lib/supabase';
 
 const { height } = Dimensions.get('window');
 const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
@@ -46,38 +47,23 @@ const LOCATIONS_DB = [
     type: 'location',
     address: 'Electronic City, Bengaluru, Karnataka 560100',
     coordinates: { latitude: 12.8399, longitude: 77.6770 }
-  },
-  {
-    title: 'MG Road',
-    type: 'location',
-    address: 'MG Road, Bengaluru, Karnataka 560001',
-    coordinates: { latitude: 12.9756, longitude: 77.6097 }
-  },
-  {
-    title: 'Jayanagar',
-    type: 'location',
-    address: 'Jayanagar, Bengaluru, Karnataka 560011',
-    coordinates: { latitude: 12.9250, longitude: 77.5938 }
-  },
-  {
-    title: 'JP Nagar',
-    type: 'location',
-    address: 'JP Nagar, Bengaluru, Karnataka 560078',
-    coordinates: { latitude: 12.9077, longitude: 77.5851 }
   }
 ];
 
-// Saved locations
-const SAVED_LOCATIONS = [
-  { title: 'Home', type: 'saved', address: '123 Main St, Indiranagar, Bangalore', coordinates: { latitude: 12.9719, longitude: 77.6412 } },
-  { title: 'Office', type: 'saved', address: '456 Work Ave, Koramangala, Bangalore', coordinates: { latitude: 12.9279, longitude: 77.6271 } },
-];
+interface SavedLocation {
+  id: string;
+  title: string;
+  address: string;
+  location: string; // Point data from PostgreSQL
+  is_default: boolean;
+}
 
-// Recent locations
-const RECENT_LOCATIONS = [
-  { title: 'MG Road Mall', type: 'recent', address: 'MG Road, Bangalore', coordinates: { latitude: 12.9756, longitude: 77.6097 } },
-  { title: 'Central Park', type: 'recent', address: 'JP Nagar, Bangalore', coordinates: { latitude: 12.9077, longitude: 77.5851 } },
-];
+interface RecentLocation {
+  id: string;
+  delivery_address: string;
+  delivery_location: string; // Point data from PostgreSQL
+  created_at: string;
+}
 
 export default function SearchOverlay({ 
   visible, 
@@ -93,32 +79,106 @@ export default function SearchOverlay({
 
   const [suggestions, setSuggestions] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
+  const [recentLocations, setRecentLocations] = useState<RecentLocation[]>([]);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
       opacity.value = withTiming(1, { duration: 200 });
+      loadSavedLocations();
+      loadRecentLocations();
     } else {
       opacity.value = withTiming(0, { duration: 200 });
     }
   }, [visible]);
 
+  const loadSavedLocations = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('user_addresses')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedLocations = data.map(location => {
+        // Convert point format '(longitude,latitude)' to coordinates
+        const pointMatch = location.location.match(/\((.*?),(.*?)\)/);
+        const coordinates = pointMatch ? {
+          longitude: parseFloat(pointMatch[1]),
+          latitude: parseFloat(pointMatch[2])
+        } : null;
+
+        return {
+          ...location,
+          type: 'saved',
+          coordinates
+        };
+      });
+
+      setSavedLocations(formattedLocations);
+    } catch (error) {
+      console.error('Error loading saved locations:', error);
+    }
+  };
+
+  const loadRecentLocations = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('water_deliveries')
+        .select('id, delivery_address, delivery_location, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+
+      const formattedLocations = data.map(delivery => {
+        // Convert point format '(longitude,latitude)' to coordinates
+        const pointMatch = delivery.delivery_location.match(/\((.*?),(.*?)\)/);
+        const coordinates = pointMatch ? {
+          longitude: parseFloat(pointMatch[1]),
+          latitude: parseFloat(pointMatch[2])
+        } : null;
+
+        return {
+          id: delivery.id,
+          type: 'recent',
+          title: delivery.delivery_address.split(',')[0], // First part of address as title
+          address: delivery.delivery_address,
+          coordinates,
+          created_at: delivery.created_at
+        };
+      });
+
+      setRecentLocations(formattedLocations);
+    } catch (error) {
+      console.error('Error loading recent locations:', error);
+    }
+  };
+
   useEffect(() => {
     const fetchSuggestions = async () => {
       setIsLoading(true);
       try {
-        // Always show current location and saved locations at the top
+        // Always show current location at the top
         const defaultSuggestions = [
           { title: 'Current Location', type: 'current' },
-          ...SAVED_LOCATIONS
+          ...savedLocations,
+          ...recentLocations
         ];
 
         if (!searchQuery.trim()) {
-          // Show default suggestions and recent locations when no search query
-          setSuggestions([
-            ...defaultSuggestions,
-            ...RECENT_LOCATIONS
-          ]);
+          // Show default suggestions when no search query
+          setSuggestions(defaultSuggestions);
           return;
         }
 
@@ -176,7 +236,7 @@ export default function SearchOverlay({
 
     const debounceTimer = setTimeout(fetchSuggestions, 300);
     return () => clearTimeout(debounceTimer);
-  }, [searchQuery]);
+  }, [searchQuery, savedLocations, recentLocations]);
 
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; // Radius of the Earth in km
@@ -274,7 +334,12 @@ export default function SearchOverlay({
                     <Icon size={20} color={suggestion.type === 'current' ? '#2196F3' : '#FFA500'} />
                   </View>
                   <View style={styles.suggestionText}>
-                    <Text style={styles.suggestionTitle}>{suggestion.title}</Text>
+                    <Text style={styles.suggestionTitle}>
+                      {suggestion.title}
+                      {suggestion.is_default && suggestion.type === 'saved' && (
+                        <Text style={styles.defaultBadge}> (Default)</Text>
+                      )}
+                    </Text>
                     {suggestion.address && (
                       <Text style={styles.suggestionAddress}>
                         {suggestion.address}
@@ -394,6 +459,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Montserrat-Medium',
     marginBottom: 4,
+  },
+  defaultBadge: {
+    color: '#FFA500',
+    fontSize: 14,
+    fontFamily: 'Montserrat-Regular',
   },
   suggestionAddress: {
     color: '#666',

@@ -16,10 +16,85 @@ import { useTheme } from '../../context/ThemeContext';
 import { useRouter } from 'expo-router';
 import SearchOverlay from '../../components/SearchOverlay';
 import ProfileMenu from '../../components/ProfileMenu';
+import AlertsOverlay from '../../components/AlertsOverlay';
 import { supabase } from '../../lib/supabase';
 import WaterVolumeModal from '../../components/WaterVolumeModal';
 
 const { height } = Dimensions.get('window');
+
+function WebMap({ style, currentLocation, selectedLocation }) {
+  const [mapUrl, setMapUrl] = useState('https://www.openstreetmap.org/export/embed.html?bbox=77.5746,12.9516,77.6146,12.9916&amp;layer=mapnik');
+
+  useEffect(() => {
+    if (selectedLocation) {
+      const { latitude, longitude } = selectedLocation;
+      setMapUrl(`https://www.openstreetmap.org/export/embed.html?bbox=${longitude-0.02},${latitude-0.02},${longitude+0.02},${latitude+0.02}&amp;layer=mapnik`);
+    } else if (currentLocation) {
+      const { latitude, longitude } = currentLocation.coords;
+      setMapUrl(`https://www.openstreetmap.org/export/embed.html?bbox=${longitude-0.02},${latitude-0.02},${longitude+0.02},${latitude+0.02}&amp;layer=mapnik`);
+    }
+  }, [currentLocation, selectedLocation]);
+
+  return (
+    <View style={[style, { overflow: 'hidden' }]}>
+      <iframe
+        title="location-map"
+        src={mapUrl}
+        style={{
+          border: 0,
+          height: '100%',
+          width: '100%',
+        }}
+      />
+    </View>
+  );
+}
+
+function NativeMap({ style, currentLocation, selectedLocation }) {
+  let Map;
+  try {
+    Map = require('react-native-maps').default;
+  } catch (error) {
+    console.error('Failed to load react-native-maps:', error);
+  }
+
+  if (!Map) {
+    return (
+      <View style={[style, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Text>Map not available</Text>
+      </View>
+    );
+  }
+
+  const region = selectedLocation ? {
+    latitude: selectedLocation.latitude,
+    longitude: selectedLocation.longitude,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
+  } : currentLocation ? {
+    latitude: currentLocation.coords.latitude,
+    longitude: currentLocation.coords.longitude,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
+  } : {
+    latitude: 12.9716,
+    longitude: 77.5946,
+    latitudeDelta: 0.0922,
+    longitudeDelta: 0.0421,
+  };
+
+  return (
+    <Map
+      style={style}
+      region={region}
+    />
+  );
+}
+
+const MapView = Platform.select({
+  web: () => WebMap,
+  default: () => NativeMap,
+})();
 
 interface WaterContainer {
   id: string;
@@ -35,82 +110,6 @@ interface WaterContainer {
   }>;
   distance?: number;
 }
-
-const MapView = Platform.select({
-  web: () => {
-    return function WebMap({ style, currentLocation, selectedLocation }) {
-      const [mapUrl, setMapUrl] = useState('https://www.openstreetmap.org/export/embed.html?bbox=77.5746,12.9516,77.6146,12.9916&amp;layer=mapnik');
-
-      useEffect(() => {
-        if (selectedLocation) {
-          const { latitude, longitude } = selectedLocation;
-          setMapUrl(`https://www.openstreetmap.org/export/embed.html?bbox=${longitude-0.02},${latitude-0.02},${longitude+0.02},${latitude+0.02}&amp;layer=mapnik`);
-        } else if (currentLocation) {
-          const { latitude, longitude } = currentLocation.coords;
-          setMapUrl(`https://www.openstreetmap.org/export/embed.html?bbox=${longitude-0.02},${latitude-0.02},${longitude+0.02},${latitude+0.02}&amp;layer=mapnik`);
-        }
-      }, [currentLocation, selectedLocation]);
-
-      return (
-        <View style={[style, { overflow: 'hidden' }]}>
-          <iframe
-            title="location-map"
-            src={mapUrl}
-            style={{
-              border: 0,
-              height: '100%',
-              width: '100%',
-            }}
-          />
-        </View>
-      );
-    };
-  },
-  default: () => {
-    try {
-      // Only import react-native-maps on native platforms
-      if (Platform.OS !== 'web') {
-        const Map = require('react-native-maps').default;
-        return function NativeMap({ style, currentLocation, selectedLocation }) {
-          if (!Map) return null;
-          
-          const region = selectedLocation ? {
-            latitude: selectedLocation.latitude,
-            longitude: selectedLocation.longitude,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          } : currentLocation ? {
-            latitude: currentLocation.coords.latitude,
-            longitude: currentLocation.coords.longitude,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          } : {
-            latitude: 12.9716,
-            longitude: 77.5946,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          };
-          
-          return (
-            <Map
-              style={style}
-              region={region}
-            />
-          );
-        };
-      }
-    } catch (e) {
-      console.error('Error loading map:', e);
-    }
-    return function FallbackMap() {
-      return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text>Map not available</Text>
-        </View>
-      );
-    };
-  },
-})();
 
 export default function Home() {
   const router = useRouter();
@@ -137,7 +136,6 @@ export default function Home() {
   useEffect(() => {
     fetchContainers();
     
-    // Subscribe to real-time updates
     const subscription = supabase
       .channel('water_containers')
       .on('postgres_changes', {
@@ -205,7 +203,6 @@ export default function Home() {
 
         let distance = 0;
         if (defaultAddress?.coordinates) {
-          // Calculate distance from default address instead of current location
           distance = calculateDistance(
             defaultAddress.coordinates.latitude,
             defaultAddress.coordinates.longitude,
@@ -220,7 +217,6 @@ export default function Home() {
         };
       });
 
-      // Sort by distance
       containersWithDistance.sort((a, b) => a.distance - b.distance);
       setContainers(containersWithDistance);
     } catch (error) {
@@ -348,6 +344,7 @@ export default function Home() {
 
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
+      <AlertsOverlay />
       <View style={[styles.header, { backgroundColor: bgColor }]}>
         <Text style={[styles.logo, { color: textColor }]}>AquaGo</Text>
         <View style={styles.headerButtons}>
@@ -470,7 +467,7 @@ export default function Home() {
             console.log('[Modal]: Order successful');
             setShowVolumeModal(false);
             setSelectedContainer(null);
-            fetchContainers(); // Refresh containers after order
+            fetchContainers();
           }}
           selectedContainer={selectedContainer}
         />

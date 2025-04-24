@@ -1,36 +1,28 @@
-import { useEffect } from 'react';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { ThemeProvider } from '../context/ThemeContext';
 import { SessionProvider, useSession } from '../context/SessionContext';
 import { View, ActivityIndicator } from 'react-native';
+import LoadingScreen from '../components/LoadingScreen';
 
 function useProtectedRoute() {
   const { session, isLoading } = useSession();
-  const segments = useSegments();
-  const router = useRouter();
+  const [showLoading, setShowLoading] = useState(true);
 
   useEffect(() => {
-    if (isLoading) return;
-
-    const inAuthGroup = segments[0] === '(auth)';
-
-    if (!session && !inAuthGroup) {
-      // Redirect to login if not authenticated
-      router.replace('/login');
-    } else if (session && inAuthGroup) {
-      // Redirect to home if authenticated and trying to access auth pages
-      router.replace('/');
+    if (!isLoading) {
+      // Show loading screen for at least 2 seconds
+      const timer = setTimeout(() => {
+        setShowLoading(false);
+      }, 2000);
+      return () => clearTimeout(timer);
     }
-  }, [session, segments, isLoading]);
+  }, [isLoading]);
 
-  if (isLoading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#1a1f2b' }}>
-        <ActivityIndicator size="large" color="#FFA500" />
-      </View>
-    );
+  if (isLoading || showLoading) {
+    return <LoadingScreen />;
   }
 
   return null;
