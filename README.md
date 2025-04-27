@@ -76,6 +76,17 @@ password: hhhhhh
 java -jar bundletool-all-1.18.1.jar build-apks --bundle=application-9eb7cec7-ae03-49be-94f8-e985c2b0fbdd.aab --output=aquago.apks --ks my-release-key.keystore --ks-key-alias alias_name
 ```
 
+### Installing apks
+
+ref: https://stackoverflow.com/questions/53040047/generate-an-apk-file-from-an-aab-file-android-app-bundle
+
+```bash
+# build apks according to connected device
+java -jar ../script/bundletool-all-1.18.1.jar build-apks --bundle=application.aab --output=aqua.apks --connected-device
+
+# Install on connected device
+java -jar ../script/bundletool-all-1.18.1.jar install-apks --apks=aqua.apks
+```
 
 # TODO: add
 NODE_ENV=production
