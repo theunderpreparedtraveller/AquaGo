@@ -74,6 +74,12 @@ password: hhhhhh
 
 ```bash
 java -jar bundletool-all-1.18.1.jar build-apks --bundle=application-9eb7cec7-ae03-49be-94f8-e985c2b0fbdd.aab --output=aquago.apks --ks my-release-key.keystore --ks-key-alias alias_name
+
+# or
+
+java -jar bundletool-all-1.18.1.jar build-apks --bundle=application-9eb7cec7-ae03-49be-94f8-e985c2b0fbdd.aab --output=aquago.apks --mode=universal --ks ../my-release-key.keystore --ks-key-alias alias_name
+
+# unzip app.apks
 ```
 
 ### Installing apks
@@ -90,3 +96,8 @@ java -jar ../script/bundletool-all-1.18.1.jar install-apks --apks=aqua.apks
 
 # TODO: add
 NODE_ENV=production
+
+### other installations
+sudo dnf isntall qemu-system-x86_64
+https://www.reddit.com/r/Fedora/comments/18s1z94/have_any_of_you_in_wayland_fedora_39_had_issues/
+
