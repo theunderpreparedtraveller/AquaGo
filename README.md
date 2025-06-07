@@ -62,6 +62,14 @@ cd $ANDROID_HOME/cmdline-tools/bin
 eas build --platform android --local
 ```
 
+#### or
+
+```bash
+npx sentry-cli login
+
+npx expo run:android --variant release
+```
+
 ### Generating Apk from AAB file
 
 Create key with some password

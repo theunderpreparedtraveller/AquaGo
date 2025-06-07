@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "EXPO_NO_TELEMETRY=1 expo start",
     "build:web": "expo export --platform web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@expo-google-fonts/montserrat": "^0.2.3",
@@ -50,6 +52,8 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@react-native-community/cli": "latest",
+    "@sentry/cli": "latest",
     "@types/react": "~18.3.12",
     "eslint": "^8.57.0",
     "eslint-config-expo": "~8.0.1",
