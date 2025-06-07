@@ -6,6 +6,18 @@ import { ThemeProvider } from '../context/ThemeContext';
 import { SessionProvider, useSession } from '../context/SessionContext';
 import { View, ActivityIndicator } from 'react-native';
 import LoadingScreen from '../components/LoadingScreen';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: 'https://a336ec2be8c48c6df44db130255345a7@o4509456068902912.ingest.de.sentry.io/4509456071262288',
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
 
 function useProtectedRoute() {
   const { session, isLoading } = useSession();
@@ -47,7 +59,7 @@ function RootLayoutNav() {
   );
 }
 
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
   useFrameworkReady();
 
   return (
@@ -58,4 +70,4 @@ export default function RootLayout() {
       </ThemeProvider>
     </SessionProvider>
   );
-}
+});

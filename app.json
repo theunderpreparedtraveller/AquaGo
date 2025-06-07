@@ -23,7 +23,15 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "aqua-td"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
