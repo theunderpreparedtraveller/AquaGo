@@ -22,7 +22,14 @@ import WaterVolumeModal from '../../components/WaterVolumeModal';
 
 const { height } = Dimensions.get('window');
 
-function WebMap({ style, currentLocation, selectedLocation }) {
+interface MapProps {
+  style: any;
+  currentLocation: any;
+  selectedLocation: any;
+  ref?: React.RefObject<any>;
+}
+
+function WebMap({ style, currentLocation, selectedLocation }: MapProps) {
   const [mapUrl, setMapUrl] = useState('https://www.openstreetmap.org/export/embed.html?bbox=77.5746,12.9516,77.6146,12.9916&amp;layer=mapnik');
 
   useEffect(() => {
@@ -50,45 +57,65 @@ function WebMap({ style, currentLocation, selectedLocation }) {
   );
 }
 
-function NativeMap({ style, currentLocation, selectedLocation }) {
+function NativeMap({ style, currentLocation, selectedLocation }: MapProps) {
+  const [mapError, setMapError] = useState(false);
   let Map;
+  
   try {
     Map = require('react-native-maps').default;
   } catch (error) {
     console.error('Failed to load react-native-maps:', error);
+    setMapError(true);
   }
 
-  if (!Map) {
+  if (!Map || mapError) {
     return (
-      <View style={[style, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text>Map not available</Text>
+      <View style={[style, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#242430' }]}>
+        <Text style={{ color: '#FFFFFF', fontSize: 16, textAlign: 'center', padding: 20 }}>
+          Map not available. Please check your connection and try again.
+        </Text>
       </View>
     );
   }
 
-  const region = selectedLocation ? {
-    latitude: selectedLocation.latitude,
-    longitude: selectedLocation.longitude,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-  } : currentLocation ? {
-    latitude: currentLocation.coords.latitude,
-    longitude: currentLocation.coords.longitude,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-  } : {
-    latitude: 12.9716,
-    longitude: 77.5946,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-  };
+  try {
+    const region = selectedLocation ? {
+      latitude: selectedLocation.latitude,
+      longitude: selectedLocation.longitude,
+      latitudeDelta: 0.0922,
+      longitudeDelta: 0.0421,
+    } : currentLocation ? {
+      latitude: currentLocation.coords.latitude,
+      longitude: currentLocation.coords.longitude,
+      latitudeDelta: 0.0922,
+      longitudeDelta: 0.0421,
+    } : {
+      latitude: 12.9716,
+      longitude: 77.5946,
+      latitudeDelta: 0.0922,
+      longitudeDelta: 0.0421,
+    };
 
-  return (
-    <Map
-      style={style}
-      region={region}
-    />
-  );
+    return (
+      <Map
+        style={style}
+        region={region}
+        onError={(error: any) => {
+          console.error('Map error:', error);
+          setMapError(true);
+        }}
+      />
+    );
+  } catch (error) {
+    console.error('Error rendering map:', error);
+    return (
+      <View style={[style, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#242430' }]}>
+        <Text style={{ color: '#FFFFFF', fontSize: 16, textAlign: 'center', padding: 20 }}>
+          Error loading map. Please try again later.
+        </Text>
+      </View>
+    );
+  }
 }
 
 const MapView = Platform.select({
@@ -114,17 +141,17 @@ interface WaterContainer {
 export default function Home() {
   const router = useRouter();
   const { isDarkMode, toggleTheme } = useTheme();
-  const [location, setLocation] = useState(null);
-  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<{latitude: number, longitude: number} | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchOverlay, setShowSearchOverlay] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [containers, setContainers] = useState<WaterContainer[]>([]);
   const [loading, setLoading] = useState(true);
-  const mapRef = useRef(null);
-  const [defaultAddress, setDefaultAddress] = useState(null);
+  const mapRef = useRef<any>(null);
+  const [defaultAddress, setDefaultAddress] = useState<any>(null);
   const [showVolumeModal, setShowVolumeModal] = useState(false);
-  const [selectedContainer, setSelectedContainer] = useState(null);
+  const [selectedContainer, setSelectedContainer] = useState<any>(null);
 
   const [fontsLoaded] = useFonts({
     'Montserrat-Light': Montserrat_300Light,
@@ -255,23 +282,23 @@ export default function Home() {
     return () => backHandler.remove();
   }, [showSearchOverlay, showProfileMenu]);
 
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371;
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
-    const a = 
+    const a =
       Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
+      Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
       Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
   };
 
-  const deg2rad = (deg) => {
+  const deg2rad = (deg: number): number => {
     return deg * (Math.PI/180);
   };
 
-  const handleLocationSelect = async (suggestion) => {
+  const handleLocationSelect = async (suggestion: any) => {
     if (suggestion.type === 'current') {
       goToCurrentLocation();
     } else if (suggestion.coordinates) {
@@ -300,13 +327,10 @@ export default function Home() {
         return;
       }
 
-      let location = await Location.getLastKnownPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      let location = await Location.getLastKnownPositionAsync({});
 
       if (!location) {
-        location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
-          timeout: 3000,
-        });
+        location = await Location.getCurrentPositionAsync({});
       }
 
       setLocation(location);
@@ -318,7 +342,7 @@ export default function Home() {
     }
   };
 
-  const handleRateSelect = (container, rate) => {
+  const handleRateSelect = (container: WaterContainer, rate: any) => {
     if (!container.is_online) return;
     
     console.log('[Container Selection]:', {
@@ -416,7 +440,7 @@ export default function Home() {
               
               <View style={styles.supplierInfo}>
                 <Text style={[styles.distanceText, { color: subtitleColor }]}>
-                  📍 {container.distance.toFixed(1)} km away
+                  📍 {container.distance !== undefined ? container.distance.toFixed(1) : '?'} km away
                 </Text>
                 <Text style={[styles.availabilityText, { color: subtitleColor }]}>
                   Available Volume: {container.available_volume.toLocaleString()}L / {container.capacity.toLocaleString()}L

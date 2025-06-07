@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { StyleSheet, View, Text, Image, Dimensions } from 'react-native';
+import { StyleSheet, View, Text, Image, Dimensions, ActivityIndicator } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -8,6 +8,7 @@ import Animated, {
   withSequence,
   withTiming,
   Easing,
+  runOnJS,
 } from 'react-native-reanimated';
 import { useFonts, Montserrat_300Light, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
 
@@ -18,55 +19,86 @@ export default function LoadingScreen() {
   const scale = useSharedValue(1);
   const logoOpacity = useSharedValue(0);
 
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     'Montserrat-Light': Montserrat_300Light,
     'Montserrat-SemiBold': Montserrat_600SemiBold,
   });
 
   useEffect(() => {
-    // Truck animation
-    translateX.value = withRepeat(
-      withSequence(
-        withTiming(-width, { duration: 0 }),
-        withTiming(width, {
-          duration: 2000,
-          easing: Easing.inOut(Easing.ease),
-        }),
-      ),
-      -1,
-      false
-    );
+    if (fontError) {
+      console.warn('Font loading error:', fontError);
+    }
+    
+    try {
+      // Truck animation
+      translateX.value = withRepeat(
+        withSequence(
+          withTiming(-width, { duration: 0 }),
+          withTiming(width, {
+            duration: 2000,
+            easing: Easing.inOut(Easing.ease),
+          }),
+        ),
+        -1,
+        false
+      );
 
-    // Logo animation
-    logoOpacity.value = withTiming(1, { duration: 1000 });
-    scale.value = withRepeat(
-      withSequence(
-        withSpring(1.1),
-        withSpring(1)
-      ),
-      -1,
-      true
-    );
+      // Logo animation
+      logoOpacity.value = withTiming(1, { duration: 1000 });
+      scale.value = withRepeat(
+        withSequence(
+          withSpring(1.1),
+          withSpring(1)
+        ),
+        -1,
+        true
+      );
+    } catch (error) {
+      console.error('Animation error:', error);
+    }
   }, []);
 
-  const truckStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
+  const truckStyle = useAnimatedStyle(() => {
+    try {
+      return {
+        transform: [{ translateX: translateX.value }],
+      };
+    } catch (error) {
+      runOnJS(console.error)('Truck animation error:', error);
+      return {};
+    }
+  });
 
-  const logoStyle = useAnimatedStyle(() => ({
-    opacity: logoOpacity.value,
-    transform: [{ scale: scale.value }],
-  }));
+  const logoStyle = useAnimatedStyle(() => {
+    try {
+      return {
+        opacity: logoOpacity.value,
+        transform: [{ scale: scale.value }],
+      };
+    } catch (error) {
+      runOnJS(console.error)('Logo animation error:', error);
+      return {};
+    }
+  });
 
-  if (!fontsLoaded) {
-    return null;
-  }
+  // Fallback styles for when fonts aren't loaded
+  const titleStyle = fontsLoaded
+    ? styles.title
+    : { ...styles.title, fontFamily: undefined, fontWeight: 'bold' as const };
+  
+  const subtitleStyle = fontsLoaded
+    ? styles.subtitle
+    : { ...styles.subtitle, fontFamily: undefined };
+  
+  const loadingTextStyle = fontsLoaded
+    ? styles.loadingText
+    : { ...styles.loadingText, fontFamily: undefined };
 
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.logoContainer, logoStyle]}>
-        <Text style={styles.title}>AquaGo</Text>
-        <Text style={styles.subtitle}>Water Delivery Made Simple</Text>
+        <Text style={titleStyle}>AquaGo</Text>
+        <Text style={subtitleStyle}>Water Delivery Made Simple</Text>
       </Animated.View>
 
       <View style={styles.roadContainer}>
@@ -76,11 +108,13 @@ export default function LoadingScreen() {
             source={{ uri: 'https://raw.githubusercontent.com/stackblitz/stackblitz-codeflow/main/examples/water-tanker.png' }}
             style={styles.truckImage}
             resizeMode="contain"
+            onError={(e) => console.error('Image loading error:', e.nativeEvent.error)}
           />
         </Animated.View>
       </View>
 
-      <Text style={styles.loadingText}>Loading...</Text>
+      <Text style={loadingTextStyle}>Loading...</Text>
+      {!fontsLoaded && <ActivityIndicator size="large" color="#FFA500" style={{ marginTop: 10 }} />}
     </View>
   );
 }

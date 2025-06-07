@@ -65,22 +65,43 @@ interface RecentLocation {
   created_at: string;
 }
 
-export default function SearchOverlay({ 
-  visible, 
-  onClose, 
-  searchQuery, 
+interface SearchSuggestion {
+  title: string;
+  type: string;
+  address?: string;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+  };
+  distance?: number;
+  is_default?: boolean;
+  created_at?: string;
+}
+
+interface SearchOverlayProps {
+  visible: boolean;
+  onClose: () => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  onLocationSelect: (suggestion: SearchSuggestion) => void;
+}
+
+export default function SearchOverlay({
+  visible,
+  onClose,
+  searchQuery,
   onSearchChange,
   onLocationSelect,
-}) {
+}: SearchOverlayProps) {
   const [fontsLoaded] = useFonts({
     'Montserrat-Regular': Montserrat_400Regular,
     'Montserrat-Medium': Montserrat_500Medium,
   });
 
-  const [suggestions, setSuggestions] = useState([]);
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [savedLocations, setSavedLocations] = useState<SavedLocation[]>([]);
-  const [recentLocations, setRecentLocations] = useState<RecentLocation[]>([]);
+  const [savedLocations, setSavedLocations] = useState<SearchSuggestion[]>([]);
+  const [recentLocations, setRecentLocations] = useState<SearchSuggestion[]>([]);
   const opacity = useSharedValue(0);
 
   useEffect(() => {
@@ -147,7 +168,7 @@ export default function SearchOverlay({
         const coordinates = pointMatch ? {
           longitude: parseFloat(pointMatch[1]),
           latitude: parseFloat(pointMatch[2])
-        } : null;
+        } : undefined;
 
         return {
           id: delivery.id,
@@ -159,7 +180,7 @@ export default function SearchOverlay({
         };
       });
 
-      setRecentLocations(formattedLocations);
+      setRecentLocations(formattedLocations as SearchSuggestion[]);
     } catch (error) {
       console.error('Error loading recent locations:', error);
     }
@@ -170,23 +191,38 @@ export default function SearchOverlay({
       setIsLoading(true);
       try {
         // Always show current location at the top
-        const defaultSuggestions = [
-          { title: 'Current Location', type: 'current' },
-          ...savedLocations,
-          ...recentLocations
+        let defaultSuggestions = [
+          { title: 'Current Location', type: 'current' }
         ];
+        
+        // Safely add saved and recent locations
+        try {
+          defaultSuggestions = [
+            ...defaultSuggestions,
+            ...(savedLocations || []),
+            ...(recentLocations || [])
+          ];
+        } catch (locError) {
+          console.error('Error adding saved/recent locations:', locError);
+        }
 
-        if (!searchQuery.trim()) {
+        if (!searchQuery || !searchQuery.trim()) {
           // Show default suggestions when no search query
           setSuggestions(defaultSuggestions);
+          setIsLoading(false);
           return;
         }
 
         // Search in locations database
-        const searchResults = LOCATIONS_DB.filter(location => 
-          location.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          location.address.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        let searchResults: SearchSuggestion[] = [];
+        try {
+          searchResults = LOCATIONS_DB.filter(location =>
+            location.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            location.address.toLowerCase().includes(searchQuery.toLowerCase())
+          );
+        } catch (searchError) {
+          console.error('Error searching locations:', searchError);
+        }
 
         // Get current location for distance calculation
         let currentLocation = null;
@@ -200,26 +236,36 @@ export default function SearchOverlay({
         }
 
         // Calculate distances if we have current location
-        const resultsWithDistance = searchResults.map(result => {
-          if (currentLocation && result.coordinates) {
-            const distance = calculateDistance(
-              currentLocation.coords.latitude,
-              currentLocation.coords.longitude,
-              result.coordinates.latitude,
-              result.coordinates.longitude
-            );
-            return { ...result, distance };
-          }
-          return result;
-        });
+        let resultsWithDistance: SearchSuggestion[] = [];
+        try {
+          resultsWithDistance = searchResults.map(result => {
+            if (currentLocation && result.coordinates) {
+              try {
+                const distance = calculateDistance(
+                  currentLocation.coords.latitude,
+                  currentLocation.coords.longitude,
+                  result.coordinates.latitude,
+                  result.coordinates.longitude
+                );
+                return { ...result, distance };
+              } catch (distError) {
+                console.error('Error calculating distance:', distError);
+                return result;
+              }
+            }
+            return result;
+          });
 
-        // Sort by distance if available
-        resultsWithDistance.sort((a, b) => {
-          if (a.distance && b.distance) {
-            return a.distance - b.distance;
-          }
-          return 0;
-        });
+          // Sort by distance if available
+          resultsWithDistance.sort((a, b) => {
+            if (a.distance && b.distance) {
+              return a.distance - b.distance;
+            }
+            return 0;
+          });
+        } catch (mapError) {
+          console.error('Error processing search results:', mapError);
+        }
 
         setSuggestions([
           ...defaultSuggestions,
@@ -228,17 +274,24 @@ export default function SearchOverlay({
 
       } catch (error) {
         console.error('Error fetching suggestions:', error);
-        setSuggestions([]);
+        // Set at least default suggestions on error
+        setSuggestions([{ title: 'Current Location', type: 'current' }]);
       } finally {
         setIsLoading(false);
       }
     };
 
-    const debounceTimer = setTimeout(fetchSuggestions, 300);
-    return () => clearTimeout(debounceTimer);
+    try {
+      const debounceTimer = setTimeout(fetchSuggestions, 300);
+      return () => clearTimeout(debounceTimer);
+    } catch (timerError) {
+      console.error('Error setting debounce timer:', timerError);
+      fetchSuggestions();
+      return () => {};
+    }
   }, [searchQuery, savedLocations, recentLocations]);
 
-  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
     const R = 6371; // Radius of the Earth in km
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
@@ -251,7 +304,7 @@ export default function SearchOverlay({
     return distance;
   };
 
-  const deg2rad = (deg) => {
+  const deg2rad = (deg: number): number => {
     return deg * (Math.PI/180);
   };
 
@@ -264,7 +317,7 @@ export default function SearchOverlay({
     onClose();
   };
 
-  const getIcon = (type) => {
+  const getIcon = (type: string) => {
     switch (type) {
       case 'current':
         return MapPin;

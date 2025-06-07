@@ -21,21 +21,47 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUserEmail(session?.user?.email ?? null);
-      setIsLoading(false);
-    });
+    const getInitialSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error('[Auth Error]:', error);
+          setIsLoading(false);
+          return;
+        }
+        
+        setSession(data.session);
+        setUserEmail(data.session?.user?.email ?? null);
+      } catch (err) {
+        console.error('[Auth Exception]:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    getInitialSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log('[Auth]: Session state changed', _event);
-      setSession(session);
-      setUserEmail(session?.user?.email ?? null);
-      setIsLoading(false);
-    });
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        console.log('[Auth]: Session state changed', _event);
+        setSession(session);
+        setUserEmail(session?.user?.email ?? null);
+        setIsLoading(false);
+      });
 
-    return () => subscription.unsubscribe();
+      return () => {
+        try {
+          subscription.unsubscribe();
+        } catch (err) {
+          console.error('[Auth Unsubscribe Error]:', err);
+        }
+      };
+    } catch (err) {
+      console.error('[Auth Subscription Error]:', err);
+      setIsLoading(false);
+      return () => {};
+    }
   }, []);
 
   return (
@@ -48,7 +74,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 export function useSession() {
   const context = useContext(SessionContext);
   if (!context) {
-    throw new Error('useSession must be used within a SessionProvider');
+    console.warn('useSession called outside of SessionProvider, returning default context');
+    return { session: null, isLoading: false, userEmail: null };
   }
   return context;
 }

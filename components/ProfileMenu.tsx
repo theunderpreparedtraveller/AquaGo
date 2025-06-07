@@ -7,7 +7,12 @@ import { useSession } from '../context/SessionContext';
 import { supabase } from '../lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-export default function ProfileMenu({ visible, onClose }) {
+interface ProfileMenuProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export default function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
   const router = useRouter();
   const { session, userEmail } = useSession();
   
@@ -29,30 +34,45 @@ export default function ProfileMenu({ visible, onClose }) {
     { icon: Settings, label: 'Settings', route: '/settings' },
   ];
 
-  const handleMenuItemPress = (route) => {
+  const handleMenuItemPress = (route: string) => {
     onClose();
-    router.push(route);
+    router.push(route as any);
   };
 
   const handleAuthAction = async () => {
     if (session) {
       try {
-        await supabase.auth.signOut();
-        await AsyncStorage.clear();
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+          console.error('[Auth Error]:', error);
+          // Continue with cleanup even if there's an error
+        }
+        
+        try {
+          await AsyncStorage.clear();
+        } catch (storageError) {
+          console.error('[Storage Error]:', storageError);
+          // Continue with cleanup even if there's an error
+        }
         
         if (typeof window !== 'undefined') {
-          document.cookie.split(';').forEach(cookie => {
-            document.cookie = cookie
-              .replace(/^ +/, '')
-              .replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
-          });
+          try {
+            document.cookie.split(';').forEach(cookie => {
+              document.cookie = cookie
+                .replace(/^ +/, '')
+                .replace(/=.*/, `=;expires=${new Date(0).toUTCString()};path=/`);
+            });
+          } catch (cookieError) {
+            console.error('[Cookie Error]:', cookieError);
+          }
         }
         
         console.log('[Auth]: Successfully cleared all auth data');
-        onClose();
-        router.replace('/login');
       } catch (error) {
         console.error('[Auth Error]:', error);
+      } finally {
+        onClose();
+        router.replace('/login');
       }
     } else {
       onClose();

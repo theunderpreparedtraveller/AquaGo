@@ -40,39 +40,60 @@ export default function AlertsOverlay() {
 
       // Check location permission
       if (Platform.OS !== 'web') {
-        const { status } = await Location.getForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          newAlerts.push({
-            type: 'location',
-            title: 'Location Access Required',
-            message: 'Please enable location services to find nearby water suppliers.',
-            action: 'Enable Location',
-            onPress: async () => {
-              await Location.requestForegroundPermissionsAsync();
-              checkAlerts();
-            }
-          });
+        try {
+          const { status } = await Location.getForegroundPermissionsAsync();
+          if (status !== 'granted') {
+            newAlerts.push({
+              type: 'location',
+              title: 'Location Access Required',
+              message: 'Please enable location services to find nearby water suppliers.',
+              action: 'Enable Location',
+              onPress: async () => {
+                try {
+                  await Location.requestForegroundPermissionsAsync();
+                  checkAlerts();
+                } catch (permError) {
+                  console.error('Error requesting location permission:', permError);
+                }
+              }
+            });
+          }
+        } catch (locationError) {
+          console.error('Error checking location permission:', locationError);
         }
       }
 
       // Check profile completeness
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('name, phone, address')
-          .eq('id', user.id)
-          .single();
+      try {
+        const { data, error: userError } = await supabase.auth.getUser();
+        
+        if (userError) {
+          console.error('Error getting user:', userError);
+        } else if (data.user) {
+          try {
+            const { data: profile, error: profileError } = await supabase
+              .from('profiles')
+              .select('name, phone, address')
+              .eq('id', data.user.id)
+              .single();
 
-        if (!error && (!profile?.name || !profile?.phone || !profile?.address)) {
-          newAlerts.push({
-            type: 'profile',
-            title: 'Complete Your Profile',
-            message: 'Please complete your profile information for better service.',
-            action: 'Update Profile',
-            onPress: () => router.push('/edit-profile')
-          });
+            if (profileError) {
+              console.error('Error fetching profile:', profileError);
+            } else if (!profile?.name || !profile?.phone || !profile?.address) {
+              newAlerts.push({
+                type: 'profile',
+                title: 'Complete Your Profile',
+                message: 'Please complete your profile information for better service.',
+                action: 'Update Profile',
+                onPress: () => router.push('/edit-profile' as any)
+              });
+            }
+          } catch (profileQueryError) {
+            console.error('Error in profile query:', profileQueryError);
+          }
         }
+      } catch (authError) {
+        console.error('Error in auth check:', authError);
       }
 
       setAlerts(newAlerts);

@@ -75,11 +75,13 @@ password: hhhhhh
 ```bash
 java -jar bundletool-all-1.18.1.jar build-apks --bundle=application-9eb7cec7-ae03-49be-94f8-e985c2b0fbdd.aab --output=aquago.apks --ks my-release-key.keystore --ks-key-alias alias_name
 
+java -jar ../bundletool-all-1.18.1.jar build-apks --apks aquago.apks
+
 # or
 
-java -jar bundletool-all-1.18.1.jar build-apks --bundle=application-9eb7cec7-ae03-49be-94f8-e985c2b0fbdd.aab --output=aquago.apks --mode=universal --ks ../my-release-key.keystore --ks-key-alias alias_name
+java -jar ../bundletool-all-1.18.1.jar build-apks --bundle=application-9eb7cec7-ae03-49be-94f8-e985c2b0fbdd.aab --output=aquago.apks --mode=universal --ks ../my-release-key.keystore --ks-key-alias alias_name
 
-# unzip app.apks
+unzip app.apks
 ```
 
 ### Installing apks

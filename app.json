@@ -12,7 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.trev0r.boltexponativewind",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to find nearby water suppliers.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "This app needs access to your location to find nearby water suppliers."
       }
     },
     "web": {
@@ -35,7 +37,16 @@
       }
     },
     "android": {
-      "package": "com.trev0r.boltexponativewind"
+      "package": "com.trev0r.boltexponativewind",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_API_KEY_HERE"
+        }
+      }
     }
   }
 }
