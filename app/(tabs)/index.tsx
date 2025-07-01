@@ -59,10 +59,12 @@ function WebMap({ style, currentLocation, selectedLocation }: MapProps) {
 
 function NativeMap({ style, currentLocation, selectedLocation }: MapProps) {
   const [mapError, setMapError] = useState(false);
-  let Map;
-  
+  let Map, Marker;
+
   try {
-    Map = require('react-native-maps').default;
+    const maps = require('react-native-maps');
+    Map = maps.default;
+    Marker = maps.Marker;
   } catch (error) {
     console.error('Failed to load react-native-maps:', error);
     setMapError(true);
@@ -104,7 +106,27 @@ function NativeMap({ style, currentLocation, selectedLocation }: MapProps) {
           console.error('Map error:', error);
           setMapError(true);
         }}
-      />
+      >
+        {currentLocation && (
+          <Marker
+            coordinate={{
+              latitude: currentLocation.coords.latitude,
+              longitude: currentLocation.coords.longitude,
+            }}
+            title="You are here"
+            description="Current Location"
+            pinColor="orange"
+          />
+        )}
+        {selectedLocation && (
+          <Marker
+            coordinate={selectedLocation}
+            title="Selected Location"
+            description="You selected this location"
+            pinColor="blue"
+          />
+        )}
+      </Map>
     );
   } catch (error) {
     console.error('Error rendering map:', error);
@@ -117,6 +139,7 @@ function NativeMap({ style, currentLocation, selectedLocation }: MapProps) {
     );
   }
 }
+
 
 const MapView = Platform.select({
   web: () => WebMap,

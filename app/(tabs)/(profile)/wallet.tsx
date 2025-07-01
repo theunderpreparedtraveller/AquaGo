@@ -4,6 +4,7 @@ import { Plus, ArrowUpRight, ArrowDownLeft } from 'lucide-react-native';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
 import { supabase } from '../../../lib/supabase';
 import AddMoneyModal from '../../../components/AddMoneyModal';
+import { useTheme } from '../../../context/ThemeContext';
 
 // Get status bar height
 const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
@@ -18,6 +19,8 @@ interface Transaction {
 }
 
 export default function Wallet() {
+  const { isDarkMode, toggleTheme } = useTheme();
+  const textColor = isDarkMode ? '#ffffff' : '#000000';
   const [showAddMoney, setShowAddMoney] = useState(false);
   const [balance, setBalance] = useState(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -82,13 +85,18 @@ export default function Wallet() {
   if (!fontsLoaded) {
     return null;
   }
-
+  const bgColor = isDarkMode ? '#1a1f2b' : '#ffffff';
+  const bgColorcard = isDarkMode ? '#1a1f2b' : '#F5F5F5';
+  const cardBgColor = isDarkMode ? '#1a1f2B' : '#f5f5f5';
+  const subtitleColor = isDarkMode ? '#666666' : '#757575';
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: bgColor }]}>
+      <Text style={[styles.logo, { color: textColor }]}></Text>
+      <Text style={[styles.logo, { color: textColor }]}>AquaGo</Text>
       <ScrollView style={styles.scrollView}>
-        <View style={styles.balanceCard}>
+        <View style={[styles.balanceCard, { backgroundColor: bgColorcard }]}>
           <Text style={styles.balanceLabel}>Available Balance</Text>
-          <Text style={styles.balanceAmount}>₹{balance.toFixed(2)}</Text>
+          <Text style={[styles.balanceAmount,{ color: textColor }]}>₹{balance.toFixed(2)}</Text>
           <TouchableOpacity 
             style={styles.addMoneyButton}
             onPress={() => setShowAddMoney(true)}
@@ -147,6 +155,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#1a1f2b',
     paddingTop: STATUSBAR_HEIGHT,
+  },
+  logo: {
+    fontSize: 24,
+    fontFamily: 'Montserrat-Light',
+    marginLeft:35
   },
   scrollView: {
     flex: 1,

@@ -13,10 +13,13 @@ import {
 import { MapPin, Phone, Mail, User as UserIcon } from 'lucide-react-native';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
 import { supabase } from '../../../lib/supabase';
+import { useTheme } from '../../../context/ThemeContext';
+
 
 const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
-
 export default function EditProfile() {
+  const { isDarkMode, toggleTheme } = useTheme();
+  const textColor = isDarkMode ? '#ffffff' : '#000000';
   const [profile, setProfile] = useState({
     name: '',
     email: '',
@@ -86,20 +89,26 @@ export default function EditProfile() {
   if (!fontsLoaded) {
     return null;
   }
-
+  const bgColor = isDarkMode ? '#1a1f2b' : '#ffffff';
+  const bgColorcard = isDarkMode ? '#242430' : '#F5F5F5';
+  const fieldcolor = isDarkMode ? '#1a1f2B' : '#f5f5f5';
+  const subtitleColor = isDarkMode ? '#666666' : '#757575';
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: bgColor }]}>
       {loading ? (
         <Text style={styles.loadingText}>Loading profile...</Text>
       ) : (
         <>
           <View style={styles.section}>
+          <Text style={[styles.logo, { color: textColor }]}>AquaGo</Text>
+
+          <Text style={styles.sectionTitle}></Text>
             <Text style={styles.sectionTitle}>Personal Information</Text>
             
-            <View style={styles.inputGroup}>
-              <UserIcon size={20} color="#666" />
+            <View style={[styles.inputGroup, {color: textColor,backgroundColor:bgColorcard }]}>
+              <UserIcon size={20} style={[styles.input, { color: textColor,backgroundColor:bgColorcard }]} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: textColor,backgroundColor:bgColorcard }]}
                 placeholder="Full Name"
                 placeholderTextColor="#666"
                 value={profile.name}
@@ -107,33 +116,33 @@ export default function EditProfile() {
               />
             </View>
 
-            <View style={styles.inputGroup}>
-              <Mail size={20} color="#666" />
+            <View style={[styles.inputGroup, {color: textColor,backgroundColor:bgColorcard }]}>
+              <Mail size={20} style={[styles.input, { color: textColor,backgroundColor:bgColorcard }]} />
               <TextInput
-                style={[styles.input, styles.inputDisabled]}
+                style={[styles.input, { color: textColor,backgroundColor:bgColorcard }]}
                 value={profile.email}
                 editable={false}
               />
             </View>
 
-            <View style={styles.inputGroup}>
-              <Phone size={20} color="#666" />
+            <View style={[styles.inputGroup, {color: textColor,backgroundColor:bgColorcard }]}>
+              <Phone size={20} style={[styles.input, { color: textColor,backgroundColor:bgColorcard }]} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: textColor,backgroundColor:bgColorcard }]}
                 placeholder="Phone Number"
-                placeholderTextColor="#666"
+                
                 value={profile.phone}
                 onChangeText={(text) => setProfile({ ...profile, phone: text })}
                 keyboardType="phone-pad"
               />
             </View>
 
-            <View style={styles.inputGroup}>
-              <MapPin size={20} color="#666" />
+            <View style={[styles.inputGroup, {color: textColor,backgroundColor:bgColorcard }]}>
+              <MapPin size={20} style={[styles.input, { color: textColor,backgroundColor:bgColorcard }]} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: textColor,backgroundColor:bgColorcard }]}
                 placeholder="Address"
-                placeholderTextColor="#666"
+              
                 value={profile.address}
                 onChangeText={(text) => setProfile({ ...profile, address: text })}
                 multiline
@@ -168,6 +177,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 20,
     fontFamily: 'Montserrat-Regular',
+  },
+  logo: {
+    fontSize: 24,
+    fontFamily: 'Montserrat-Light',
   },
   section: {
     marginBottom: 30,

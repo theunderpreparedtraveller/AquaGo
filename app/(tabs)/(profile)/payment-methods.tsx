@@ -1,11 +1,13 @@
 import { StyleSheet, View, Text, ScrollView, TouchableOpacity, Platform, StatusBar } from 'react-native';
 import { CreditCard, Plus } from 'lucide-react-native';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
-
+import { useTheme } from '../../../context/ThemeContext';
 // Get status bar height
 const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
 
 export default function PaymentMethods() {
+  const { isDarkMode, toggleTheme } = useTheme();
+  const textColor = isDarkMode ? '#ffffff' : '#000000';
   const [fontsLoaded] = useFonts({
     'Montserrat-Regular': Montserrat_400Regular,
     'Montserrat-Medium': Montserrat_500Medium,
@@ -28,13 +30,19 @@ export default function PaymentMethods() {
       isDefault: false,
     },
   ];
-
+  const bgColor = isDarkMode ? '#1a1f2b' : '#ffffff';
+  const bgColorcard = isDarkMode ? '#242430' : '#F5F5F5';
+  const cardBgColor = isDarkMode ? '#1a1f2B' : '#f5f5f5';
+  const subtitleColor = isDarkMode ? '#666666' : '#757575';
   if (!fontsLoaded) {
     return null;
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={[styles.container, { backgroundColor: bgColor }]}>
+      <Text style={[styles.logo, { color: textColor }]}></Text>
+       <Text style={[styles.logo, { color: textColor }]}>AquaGo</Text>
+       <Text style={[styles.logo, { color: textColor }]}></Text>
       <TouchableOpacity style={styles.addButton}>
         <Plus size={24} color="#000000" />
         <Text style={styles.addButtonText}>Add Payment Method</Text>
@@ -43,13 +51,13 @@ export default function PaymentMethods() {
       <View style={styles.methodsContainer}>
         <Text style={styles.sectionTitle}>Saved Payment Methods</Text>
         {paymentMethods.map((method) => (
-          <View key={method.id} style={styles.methodCard}>
+          <View key={method.id} style={[styles.methodCard,{ backgroundColor: bgColorcard }]}>
             <View style={styles.methodIcon}>
               <CreditCard size={24} color="#FFA500" />
             </View>
             <View style={styles.methodDetails}>
               <View style={styles.methodHeader}>
-                <Text style={styles.methodTitle}>{method.title}</Text>
+                <Text style={[styles.methodTitle, { color: textColor }]}>{method.title}</Text>
                 {method.isDefault && (
                   <View style={styles.defaultBadge}>
                     <Text style={styles.defaultText}>Default</Text>
@@ -90,6 +98,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'Montserrat-SemiBold',
     marginLeft: 10,
+  },
+  logo: {
+    fontSize: 24,
+    fontFamily: 'Montserrat-Light',
+    marginLeft:10
   },
   methodsContainer: {
     marginTop: 10,

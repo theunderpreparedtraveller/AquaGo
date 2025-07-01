@@ -94,6 +94,7 @@ export default function AddMoneyModal({ visible, onClose, onSuccess }) {
   };
 
   return (
+    
     <Modal
       visible={visible}
       transparent
@@ -186,6 +187,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+  },
+  logo: {
+    fontSize: 24,
+    fontFamily: 'Montserrat-Light',
   },
   modal: {
     backgroundColor: '#1a1f2b',

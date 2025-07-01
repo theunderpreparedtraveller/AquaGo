@@ -98,16 +98,7 @@ export default function Settings() {
         },
       ],
     },
-    {
-      title: 'Security',
-      items: [
-        {
-          icon: Shield,
-          label: 'Privacy Settings',
-          type: 'link',
-        },
-      ],
-    },
+
     {
       title: 'Support',
       items: [

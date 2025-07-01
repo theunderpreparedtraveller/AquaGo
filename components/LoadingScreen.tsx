@@ -105,7 +105,7 @@ export default function LoadingScreen() {
         <View style={styles.road} />
         <Animated.View style={[styles.truckContainer, truckStyle]}>
           <Image
-            source={{ uri: 'https://raw.githubusercontent.com/stackblitz/stackblitz-codeflow/main/examples/water-tanker.png' }}
+            source={{ uri: 'https://res.cloudinary.com/hackers-heaven/image/upload/v1725022140/tanker-truck.png' }}
             style={styles.truckImage}
             resizeMode="contain"
             onError={(e) => console.error('Image loading error:', e.nativeEvent.error)}

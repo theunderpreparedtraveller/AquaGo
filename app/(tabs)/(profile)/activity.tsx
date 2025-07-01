@@ -4,6 +4,7 @@ import { Truck, Check, Clock, Ban, Phone, MessageSquare, X } from 'lucide-react-
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
 import { supabase } from '../../../lib/supabase';
 import ChatModal from '../../../components/ChatModal';
+import { useTheme } from '../../../context/ThemeContext';
 
 const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
 
@@ -74,6 +75,8 @@ function ActivityOverlay({ activity, onClose, onChatPress, onCallPress, onCancel
 }
 
 export default function Activity() {
+  const { isDarkMode, toggleTheme } = useTheme();
+  const textColor = isDarkMode ? '#ffffff' : '#000000';
   const [activities, setActivities] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -202,11 +205,15 @@ export default function Activity() {
   if (!fontsLoaded) {
     return null;
   }
-
+  const bgColor = isDarkMode ? '#1a1f2b' : '#ffffff';
+  const bgColorcard = isDarkMode ? '#242430' : '#F5F5F5';
+  const cardBgColor = isDarkMode ? '#1a1f2B' : '#f5f5f5';
+  const subtitleColor = isDarkMode ? '#666666' : '#757575';
   return (
     <>
       <ScrollView 
-        style={styles.container}
+      
+        style={[styles.container, { backgroundColor: bgColor }]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -215,6 +222,9 @@ export default function Activity() {
           />
         }
       >
+        <Text style={[styles.logo, { color: textColor }]}></Text>
+       <Text style={[styles.logo, { color: textColor }]}>AquaGo</Text>
+       <Text style={[styles.logo, { color: textColor }]}></Text>
         {loading ? (
           <Text style={styles.messageText}>Loading activities...</Text>
         ) : activities.length === 0 ? (
@@ -223,7 +233,7 @@ export default function Activity() {
           activities.map((activity) => (
             <TouchableOpacity
               key={activity.id}
-              style={styles.activityCard}
+              style={[styles.activityCard, { backgroundColor: bgColorcard }]}
               onPress={() => handleActivityPress(activity)}
             >
               <View style={[styles.iconContainer, { 
@@ -231,9 +241,9 @@ export default function Activity() {
               }]}>
                 {getActivityIcon(activity.status)}
               </View>
-              <View style={styles.activityContent}>
+              <View style={[styles.activityContent, { backgroundColor: bgColorcard }]}>
                 <View style={styles.activityHeader}>
-                  <Text style={styles.activityTitle}>{activity.title}</Text>
+                  <Text style={[styles.activityTitle,{ color: textColor }]}>{activity.title}</Text>
                   <Text style={styles.activityAmount}>₹{activity.amount}</Text>
                 </View>
                 <Text style={styles.activityDescription}>{activity.description}</Text>
@@ -301,6 +311,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 20,
   },
+  logo: {
+    fontSize: 24,
+    fontFamily: 'Montserrat-Light',
+    marginLeft:10
+  },
   activityCard: {
     flexDirection: 'row',
     backgroundColor: '#242430',
@@ -326,7 +341,7 @@ const styles = StyleSheet.create({
     marginBottom: 5,
   },
   activityTitle: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#FFFFFF',
     fontFamily: 'Montserrat-SemiBold',
   },
