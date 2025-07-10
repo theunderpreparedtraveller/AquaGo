@@ -25,12 +25,12 @@ export default function ProfileMenu({ visible, onClose }: ProfileMenuProps) {
   if (!fontsLoaded) {
     return null;
   }
+  //{ icon: CreditCard, label: 'Payment Methods', route: '/payment-methods' },
+  //{ icon: Wallet, label: 'Wallet', route: '/wallet' },
 
   const menuItems = [
     { icon: UserCog, label: 'Edit Profile', route: '/edit-profile' },
-    { icon: Wallet, label: 'Wallet', route: '/wallet' },
     { icon: History, label: 'Activity History', route: '/activity' },
-    { icon: CreditCard, label: 'Payment Methods', route: '/payment-methods' },
     { icon: Settings, label: 'Settings', route: '/settings' },
   ];
 

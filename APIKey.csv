@@ -1,0 +1,15 @@
+const options = {
+  method: 'POST',
+  headers: {
+    'x-client-id': ' TEST10700861a1df40d8f3190080320a16800701',
+    'x-client-secret': 'cfsk_ma_test_1ced236db0806708a4b50bd0d20b2a1f_d8b55e48',
+    'x-api-version': '2023-08-01',
+    'Content-Type': 'application/json'
+  },
+  body: '{"link_id":"123","link_amount":500,"link_currency":"INR","link_purpose":"Water order","customer_details":{"customer_phone":"9678033242"},"link_notify":{"send_sms":true,"send_email":true}}'
+};
+
+fetch('https://sandbox.cashfree.com/pg/links', options)
+  .then(response => response.json())
+  .then(response => console.log(response))
+  .catch(err => console.error(err));

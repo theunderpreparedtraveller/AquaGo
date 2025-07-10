@@ -19,7 +19,7 @@ import ProfileMenu from '../../components/ProfileMenu';
 import AlertsOverlay from '../../components/AlertsOverlay';
 import { supabase } from '../../lib/supabase';
 import WaterVolumeModal from '../../components/WaterVolumeModal';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 const { height } = Dimensions.get('window');
 
 interface MapProps {
@@ -182,7 +182,36 @@ export default function Home() {
     'Montserrat-Medium': Montserrat_500Medium,
     'Montserrat-SemiBold': Montserrat_600SemiBold,
   });
+  const [profile, setProfile] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+  });
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+  const fetchProfile = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (error) throw error;
+      setProfile(data);
+      const data1 = JSON.stringify(data);
+      await AsyncStorage.setItem('userdata', data1);
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   useEffect(() => {
     fetchContainers();
     
@@ -388,7 +417,7 @@ export default function Home() {
   const cardBgColor = isDarkMode ? '#242430' : '#f5f5f5';
   const textColor = isDarkMode ? '#ffffff' : '#000000';
   const subtitleColor = isDarkMode ? '#666666' : '#757575';
-
+  console.log(profile)
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
       <AlertsOverlay />

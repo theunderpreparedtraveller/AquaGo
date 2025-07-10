@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   StyleSheet,
   Modal,
@@ -9,10 +10,15 @@ import {
   SafeAreaView,
   ActivityIndicator,
   TextInput,
+  Alert,
+  Linking,
 } from 'react-native';
 import { Wallet, CreditCard, IndianRupee, ChevronRight } from 'lucide-react-native';
 import { useFonts, Montserrat_400Regular, Montserrat_500Medium, Montserrat_600SemiBold } from '@expo-google-fonts/montserrat';
 import { supabase } from '../lib/supabase';
+import PaymentWebView from './webviewcomponent';
+import { WebView } from 'react-native-webview';
+
 
 interface PaymentModalProps {
   visible: boolean;
@@ -26,7 +32,10 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<number>(0);
+  const [webviewVisible, setWebviewVisible] = useState(false);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [upiId, setUpiId] = useState('');
+  const [linkkId, setlinkId] = useState('');
   const [showUpiInput, setShowUpiInput] = useState(false);
 
   const [fontsLoaded] = useFonts({
@@ -68,12 +77,9 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
   const handleMethodSelect = (method: string) => {
     setSelectedMethod(method);
     setError(null);
-    if (method === 'upi') {
-      setShowUpiInput(true);
-    } else {
-      setShowUpiInput(false);
-    }
+    setShowUpiInput(method === 'upi');
   };
+
 
   const handlePayment = async () => {
     try {
@@ -92,11 +98,53 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
         if (!validateUpiId(upiId)) {
           throw new Error('Please enter a valid UPI ID');
         }
+        const amt  = amount.toFixed(2)
+        console.log(amt)
+        if (amt == "500.00"){
+            setPaymentUrl("https://payments-test.cashfree.com/links/G8rbb6e3gtv0");
+            setWebviewVisible(true);
+        }
+        if (amt == "900.00"){
+          setPaymentUrl("https://payments-test.cashfree.com/links/Y8rbb928jl2g");
+          setWebviewVisible(true);
+        }
+        if (amt == "2000.00"){
+          setPaymentUrl("https://payments-test.cashfree.com/links/I8rbbb0vnl2g");
+          setWebviewVisible(true);
+        }
+        /*
+        const value = await AsyncStorage.getItem("userdata");
+        const value_json = JSON.parse(value)
+        const phone = value_json.phone
+        const amt  = amount.toFixed(2)
+        const linkId = Math.floor(Math.random() * 100000);
+        const linkIdstr = linkId.toString()
+        setlinkId(linkIdstr)
+        const baseUrl = 'http://10.191.135.43:3000/api/order';
+        const query = `link_id=${encodeURIComponent(linkId)}&link_amount=${amt}&customer_phone=${phone}`;
+        const url = `${baseUrl}?${query}`;
+        console.log(url)
+        try {
+          const response = await fetch(url);
+          const data = await response.json();
+
+          console.log('Response:', data);
+          const url1 = data.link_url
+          if (url1) {
+            setPaymentUrl(url1);
+            setWebviewVisible(true);
+            console.log("Payment complete")
+          }
+
+        } catch (error) {
+          console.error('Error fetching data:', error);
+        }
+        */
       }
 
-      // Pass payment method and details to parent
-      onPaymentComplete(selectedMethod, selectedMethod === 'upi' ? { upi_id: upiId } : undefined);
-      onClose();
+      // Handle wallet/cash
+      //onPaymentComplete(selectedMethod);
+      //onClose();
     } catch (error) {
       console.error('[Payment Error]:', error);
       setError(error instanceof Error ? error.message : 'Payment failed');
@@ -108,125 +156,112 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
   if (!fontsLoaded) return null;
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.overlay}>
-          <View style={styles.modal}>
-            <View style={styles.header}>
-              <Text style={styles.title}>Payment</Text>
-              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.content}>
-              <View style={styles.amountContainer}>
-                <Text style={styles.amountLabel}>Amount to Pay</Text>
-                <Text style={styles.amount}>₹{amount.toFixed(2)}</Text>
+    <>
+      <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.overlay}>
+            <View style={styles.modal}>
+              <View style={styles.header}>
+                <Text style={styles.title}>Payment</Text>
+                <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
               </View>
-
-              <Text style={styles.sectionTitle}>Payment Methods</Text>
-
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethod,
-                  selectedMethod === 'wallet' && styles.selectedMethod
-                ]}
-                onPress={() => handleMethodSelect('wallet')}
-              >
-                <View style={styles.methodIcon}>
-                  <Wallet size={24} color="#FFA500" />
+              <ScrollView style={styles.content}>
+                <View style={styles.amountContainer}>
+                  <Text style={styles.amountLabel}>Amount to Pay</Text>
+                  <Text style={styles.amount}>₹{amount.toFixed(2)}</Text>
                 </View>
-                <View style={styles.methodDetails}>
-                  <Text style={styles.methodTitle}>Wallet</Text>
-                  <Text style={styles.methodBalance}>Balance: ₹{walletBalance.toFixed(2)}</Text>
-                </View>
-                <ChevronRight size={20} color="#666" />
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethod,
-                  selectedMethod === 'upi' && styles.selectedMethod
-                ]}
-                onPress={() => handleMethodSelect('upi')}
-              >
-                <View style={styles.methodIcon}>
-                  <IndianRupee size={24} color="#FFA500" />
-                </View>
-                <View style={styles.methodDetails}>
-                  <Text style={styles.methodTitle}>UPI</Text>
-                  <Text style={styles.methodSubtitle}>Pay using any UPI app</Text>
-                </View>
-                <ChevronRight size={20} color="#666" />
-              </TouchableOpacity>
+                <Text style={styles.sectionTitle}>Payment Methods</Text>
 
-              {showUpiInput && (
-                <View style={styles.upiInputContainer}>
-                  <Text style={styles.upiLabel}>Enter UPI ID</Text>
-                  <TextInput
-                    style={styles.upiInput}
-                    value={upiId}
-                    onChangeText={setUpiId}
-                    placeholder="yourname@upi"
-                    placeholderTextColor="#666"
-                    autoCapitalize="none"
-                  />
-                </View>
-              )}
+                <TouchableOpacity style={[styles.paymentMethod, selectedMethod === 'wallet' && styles.selectedMethod]} onPress={() => handleMethodSelect('wallet')}>
+                  <View style={styles.methodIcon}><Wallet size={24} color="#FFA500" /></View>
+                  <View style={styles.methodDetails}>
+                    <Text style={styles.methodTitle}>Wallet</Text>
+                    <Text style={styles.methodBalance}>Balance: ₹{walletBalance.toFixed(2)}</Text>
+                  </View>
+                  <ChevronRight size={20} color="#666" />
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[
-                  styles.paymentMethod,
-                  selectedMethod === 'cash' && styles.selectedMethod
-                ]}
-                onPress={() => handleMethodSelect('cash')}
-              >
-                <View style={styles.methodIcon}>
-                  <CreditCard size={24} color="#FFA500" />
-                </View>
-                <View style={styles.methodDetails}>
-                  <Text style={styles.methodTitle}>Cash</Text>
-                  <Text style={styles.methodSubtitle}>Pay on delivery</Text>
-                </View>
-                <ChevronRight size={20} color="#666" />
-              </TouchableOpacity>
+                <TouchableOpacity style={[styles.paymentMethod, selectedMethod === 'upi' && styles.selectedMethod]} onPress={() => handleMethodSelect('upi')}>
+                  <View style={styles.methodIcon}><IndianRupee size={24} color="#FFA500" /></View>
+                  <View style={styles.methodDetails}>
+                    <Text style={styles.methodTitle}>UPI</Text>
+                    <Text style={styles.methodSubtitle}>Pay using any UPI app</Text>
+                  </View>
+                  <ChevronRight size={20} color="#666" />
+                </TouchableOpacity>
 
-              {error && (
-                <Text style={styles.errorText}>{error}</Text>
-              )}
-            </ScrollView>
-
-            <View style={styles.footer}>
-              <TouchableOpacity
-                style={[
-                  styles.payButton,
-                  (!selectedMethod || loading) && styles.payButtonDisabled
-                ]}
-                onPress={handlePayment}
-                disabled={!selectedMethod || loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#000000" />
-                ) : (
-                  <Text style={styles.payButtonText}>
-                    Pay ₹{amount.toFixed(2)}
-                  </Text>
+                {showUpiInput && (
+                  <View style={styles.upiInputContainer}>
+                    <Text style={styles.upiLabel}>Enter UPI ID</Text>
+                    <TextInput
+                      style={styles.upiInput}
+                      value={upiId}
+                      onChangeText={setUpiId}
+                      placeholder="yourname@upi"
+                      placeholderTextColor="#666"
+                      autoCapitalize="none"
+                    />
+                  </View>
                 )}
-              </TouchableOpacity>
+
+                <TouchableOpacity style={[styles.paymentMethod, selectedMethod === 'cash' && styles.selectedMethod]} onPress={() => handleMethodSelect('cash')}>
+                  <View style={styles.methodIcon}><CreditCard size={24} color="#FFA500" /></View>
+                  <View style={styles.methodDetails}>
+                    <Text style={styles.methodTitle}>Cash</Text>
+                    <Text style={styles.methodSubtitle}>Pay on delivery</Text>
+                  </View>
+                  <ChevronRight size={20} color="#666" />
+                </TouchableOpacity>
+
+                {error && <Text style={styles.errorText}>{error}</Text>}
+              </ScrollView>
+              <View style={styles.footer}>
+                <TouchableOpacity
+                  style={[styles.payButton, (!selectedMethod || loading) && styles.payButtonDisabled]}
+                  onPress={handlePayment}
+                  disabled={!selectedMethod || loading}
+                >
+                  {loading ? <ActivityIndicator color="#000000" /> : <Text style={styles.payButtonText}>Pay ₹{amount.toFixed(2)}</Text>}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </SafeAreaView>
-    </Modal>
+        </SafeAreaView>
+      </Modal>
+
+      <Modal visible={webviewVisible} animationType="slide">
+  <SafeAreaView style={{ flex: 1 }}>
+    <View style={{ flex: 1 }}>
+      <WebView
+        source={{ uri: paymentUrl }}
+        startInLoadingState
+        javaScriptEnabled
+      />
+      <TouchableOpacity
+        style={{
+          padding: 16,
+          backgroundColor: '#FFA500',
+          alignItems: 'center'
+        }}
+        onPress={() => {
+          setWebviewVisible(false); // hide webview
+          onPaymentComplete('upi', { upi_id: upiId });
+          onClose();
+        }}
+      >
+        <Text style={{ color: '#000', fontWeight: 'bold' }}>Payment Completed</Text>
+      </TouchableOpacity>
+    </View>
+  </SafeAreaView>
+</Modal>
+    </>
   );
 }
 
+// styles object remains unchanged (from your code)
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
