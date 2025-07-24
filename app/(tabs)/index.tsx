@@ -153,6 +153,7 @@ interface WaterContainer {
   address: string;
   capacity: number;
   available_volume: number;
+  contact_number: string;
   is_active: boolean;
   rates: Array<{
     volume: number;
@@ -392,11 +393,14 @@ export default function Home() {
   };
 
   const handleRateSelect = async (container: WaterContainer, rate: any) => {
-    if (!container.is_online) return;
-
-    await AsyncStorage.setItem('container_selected_id', container.id);
-    const c = await AsyncStorage.getItem('container_selected_id');
-    console.log("container_selected_id",c)
+    if (!container.is_active) return;
+    let data = {
+      container_id: container.id,
+      name: container.name,
+      number: container.contact_number,
+    }
+    const data1 = JSON.stringify(data);
+    await AsyncStorage.setItem('container_selected_id', data1);
     setSelectedContainer({
       ...container,
       selectedRate: rate
@@ -480,7 +484,7 @@ export default function Home() {
                   {container.name}
                 </Text>
                 <View style={[styles.statusIndicator, { 
-                  backgroundColor: container.is_online ? '#4CAF50' : '#FF3B30' 
+                  backgroundColor: container.is_active ? '#4CAF50' : '#FF3B30' 
                 }]} />
               </View>
               
@@ -505,10 +509,10 @@ export default function Home() {
                     key={index} 
                     style={[
                       styles.rateButton,
-                      !container.is_online && styles.rateButtonDisabled
+                      !container.is_active && styles.rateButtonDisabled
                     ]}
                     onPress={() => handleRateSelect(container, rate)}
-                    disabled={!container.is_online}
+                    disabled={!container.is_active}
                   >
                     <Text style={styles.rateButtonText}>{rate.volume}L</Text>
                     <Text style={styles.ratePrice}>₹{rate.price}</Text>

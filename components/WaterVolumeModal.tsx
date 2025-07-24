@@ -88,15 +88,20 @@ export default function WaterVolumeModal({ visible, onClose, onSuccess, selected
 
       // Create point from coordinates
       const location = selectedAddress.location || '(0,0)';
-      const container_selected_id = await AsyncStorage.getItem('container_selected_id');
+      let container_selected_id = await AsyncStorage.getItem('container_selected_id'); 
+      let container_id = JSON.parse(container_selected_id || '{}').container_id;
+      let name = JSON.parse(container_selected_id || '{}').name
+      let number = JSON.parse(container_selected_id || '{}').number
       console.log("container_selected_id2",container_selected_id)
+      console.log(name)
+      console.log(number)
       // Create delivery order
       const { data: orderId, error: orderError } = await supabase.rpc('create_water_delivery', {
         p_user_id: user.id,
-        p_container_id: container_selected_id,
+        p_container_id: container_id,
         p_volume: parseInt(selectedVolume, 10),
         p_amount: selectedPrice,
-        p_delivery_address: selectedAddress.address,
+        p_delivery_address: container_selected_id,
         p_delivery_location: location,
         p_payment_method: paymentMethod,
         p_payment_details: paymentDetails

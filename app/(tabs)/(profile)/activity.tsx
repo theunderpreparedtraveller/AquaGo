@@ -14,6 +14,7 @@ interface Activity {
   title: string;
   description: string;
   amount: number;
+  delivery_address: string;
   status: 'completed' | 'confirmed' | 'pending' | 'cancelled';
   created_at: string;
   contact_number?: string;
@@ -49,10 +50,7 @@ function ActivityOverlay({ activity, onClose, onChatPress, onCallPress, onCancel
             <Text style={styles.overlayButtonText}>Call Supplier</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.overlayButton} onPress={onChatPress}>
-            <MessageSquare size={24} color="#FFA500" />
-            <Text style={styles.overlayButtonText}>Chat with Supplier</Text>
-          </TouchableOpacity>
+
 
           {canRequestCancellation && (
             <TouchableOpacity 
@@ -83,6 +81,7 @@ export default function Activity() {
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [showChat, setShowChat] = useState(false);
   const [showOverlay, setShowOverlay] = useState(false);
+  const [phone,setPhone] = useState(false);
 
   const [fontsLoaded] = useFonts({
     'Montserrat-Regular': Montserrat_400Regular,
@@ -93,11 +92,12 @@ export default function Activity() {
   const fetchActivities = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
+
       if (!user) return;
 
       const { data, error } = await supabase
-        .rpc('get_user_activity_history', { p_user_id: user.id });
-
+        .rpc('get_user_activity_history_new', { p_user_id: user.id });
+      console.log("data",data)
       if (error) throw error;
       setActivities(data || []);
     } catch (error) {
@@ -178,6 +178,8 @@ export default function Activity() {
   };
 
   const handleActivityPress = (activity: Activity) => {
+    let act = activity.delivery_address
+    let phone = JSON.parse(act).number
     setSelectedActivity(activity);
     setShowOverlay(true);
   };
@@ -254,6 +256,7 @@ export default function Activity() {
                   <Text style={[styles.activityStatus, { 
                     color: getStatusColor(activity.status)
                   }]}>
+                   
                     {activity.status.charAt(0).toUpperCase() + activity.status.slice(1)}
                   </Text>
                 </View>
@@ -275,9 +278,10 @@ export default function Activity() {
             setShowChat(true);
           }}
           onCallPress={() => {
-            if (selectedActivity.contact_number) {
-              handleCall(selectedActivity.contact_number);
-            }
+            let act = selectedActivity.delivery_address
+            let phone = JSON.parse(act).number
+            console.log("activity",phone)
+            handleCall(phone);
           }}
           onCancelPress={handleCancelOrder}
         />
