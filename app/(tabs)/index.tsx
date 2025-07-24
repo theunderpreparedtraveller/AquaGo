@@ -153,7 +153,7 @@ interface WaterContainer {
   address: string;
   capacity: number;
   available_volume: number;
-  is_online: boolean;
+  is_active: boolean;
   rates: Array<{
     volume: number;
     price: number;
@@ -167,6 +167,7 @@ export default function Home() {
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<{latitude: number, longitude: number} | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [container_selected_id, setcontainer_selected_id] = useState('');
   const [showSearchOverlay, setShowSearchOverlay] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [containers, setContainers] = useState<WaterContainer[]>([]);
@@ -197,10 +198,10 @@ export default function Home() {
       if (!user) return;
 
       const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
 
       if (error) throw error;
       setProfile(data);
@@ -222,7 +223,6 @@ export default function Home() {
         schema: 'public',
         table: 'water_containers'
       }, (payload) => {
-        console.log('Real-time update:', payload);
         fetchContainers();
       })
       .subscribe();
@@ -260,19 +260,16 @@ export default function Home() {
         console.error('Error fetching default address:', error);
       }
     };
-
-    fetchDefaultAddress();
   }, []);
 
   const fetchContainers = async () => {
     try {
       const { data, error } = await supabase
-        .from('water_containers')
+        .from('driver_profiles')
         .select('*')
         .order('name');
 
       if (error) throw error;
-
       const containersWithDistance = data.map(container => {
         const pointStr = container.location.slice(1, -1).split(',');
         const containerLocation = {
@@ -394,14 +391,12 @@ export default function Home() {
     }
   };
 
-  const handleRateSelect = (container: WaterContainer, rate: any) => {
+  const handleRateSelect = async (container: WaterContainer, rate: any) => {
     if (!container.is_online) return;
-    
-    console.log('[Container Selection]:', {
-      container: container.id,
-      rate: rate
-    });
-    
+
+    await AsyncStorage.setItem('container_selected_id', container.id);
+    const c = await AsyncStorage.getItem('container_selected_id');
+    console.log("container_selected_id",c)
     setSelectedContainer({
       ...container,
       selectedRate: rate
@@ -417,7 +412,6 @@ export default function Home() {
   const cardBgColor = isDarkMode ? '#242430' : '#f5f5f5';
   const textColor = isDarkMode ? '#ffffff' : '#000000';
   const subtitleColor = isDarkMode ? '#666666' : '#757575';
-  console.log(profile)
   return (
     <View style={[styles.container, { backgroundColor: bgColor }]}>
       <AlertsOverlay />
@@ -491,15 +485,13 @@ export default function Home() {
               </View>
               
               <View style={styles.supplierInfo}>
-                <Text style={[styles.distanceText, { color: subtitleColor }]}>
-                  📍 {container.distance !== undefined ? container.distance.toFixed(1) : '?'} km away
-                </Text>
+                
                 <Text style={[styles.availabilityText, { color: subtitleColor }]}>
                   Available Volume: {container.available_volume.toLocaleString()}L / {container.capacity.toLocaleString()}L
                 </Text>
                 <View style={styles.statusText}>
-                  <Text style={[styles.statusLabel, { color: container.is_online ? '#4CAF50' : '#FF3B30' }]}>
-                    {container.is_online ? '● Online' : '● Offline'}
+                  <Text style={[styles.statusLabel, { color: container.is_active ? '#4CAF50' : '#FF3B30' }]}>
+                    {container.is_active ? '● Online' : '● Offline'}
                   </Text>
                 </View>
               </View>
@@ -535,12 +527,11 @@ export default function Home() {
         <WaterVolumeModal
           visible={showVolumeModal}
           onClose={() => {
-            console.log('[Modal]: Closing modal');
+
             setShowVolumeModal(false);
             setSelectedContainer(null);
           }}
           onSuccess={() => {
-            console.log('[Modal]: Order successful');
             setShowVolumeModal(false);
             setSelectedContainer(null);
             fetchContainers();

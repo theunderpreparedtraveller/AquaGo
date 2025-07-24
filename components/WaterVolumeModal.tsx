@@ -17,7 +17,7 @@ import { supabase } from '../lib/supabase';
 import DeliveryAddressModal from './DeliveryAddressModal';
 import PaymentModal from './PaymentModal';
 import OrderConfirmationModal from './OrderConfirmationModal';
-
+import AsyncStorage from '@react-native-async-storage/async-storage';
 const STATUSBAR_HEIGHT = Platform.OS === 'ios' ? 44 : StatusBar.currentHeight || 0;
 
 interface WaterVolumeModalProps {
@@ -88,11 +88,12 @@ export default function WaterVolumeModal({ visible, onClose, onSuccess, selected
 
       // Create point from coordinates
       const location = selectedAddress.location || '(0,0)';
-
+      const container_selected_id = await AsyncStorage.getItem('container_selected_id');
+      console.log("container_selected_id2",container_selected_id)
       // Create delivery order
       const { data: orderId, error: orderError } = await supabase.rpc('create_water_delivery', {
         p_user_id: user.id,
-        p_container_id: selectedContainer.id,
+        p_container_id: container_selected_id,
         p_volume: parseInt(selectedVolume, 10),
         p_amount: selectedPrice,
         p_delivery_address: selectedAddress.address,

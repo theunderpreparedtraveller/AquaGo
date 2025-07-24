@@ -19,7 +19,28 @@ interface OrderConfirmationModalProps {
   onClose: () => void;
   orderId: string;
 }
+//add in line 164
+/*
+                    <View style={styles.contactSection}>
+                      /*
+                      <TouchableOpacity
+                        style={styles.contactButton}
+                        onPress={handleCall}
+                        disabled={!supplierContact}
+                      >
+                        <Phone size={20} color="#FFA500" />
+                        <Text style={styles.contactButtonText}>Call Supplier</Text>
+                      </TouchableOpacity>
 
+                      <TouchableOpacity
+                        style={styles.contactButton}
+                        onPress={() => setShowChat(true)}
+                      >
+                        <MessageSquare size={20} color="#FFA500" />
+                        <Text style={styles.contactButtonText}>Chat</Text>
+                      </TouchableOpacity>
+                    </View>
+*/
 export default function OrderConfirmationModal({ visible, onClose, orderId }: OrderConfirmationModalProps) {
   const [timeLeft, setTimeLeft] = useState(60);
   const [loading, setLoading] = useState(false);
@@ -160,24 +181,7 @@ export default function OrderConfirmationModal({ visible, onClose, orderId }: Or
                       </View>
                     )}
 
-                    <View style={styles.contactSection}>
-                      <TouchableOpacity
-                        style={styles.contactButton}
-                        onPress={handleCall}
-                        disabled={!supplierContact}
-                      >
-                        <Phone size={20} color="#FFA500" />
-                        <Text style={styles.contactButtonText}>Call Supplier</Text>
-                      </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.contactButton}
-                        onPress={() => setShowChat(true)}
-                      >
-                        <MessageSquare size={20} color="#FFA500" />
-                        <Text style={styles.contactButtonText}>Chat</Text>
-                      </TouchableOpacity>
-                    </View>
                   </>
                 )}
 

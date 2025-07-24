@@ -35,7 +35,7 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
   const [webviewVisible, setWebviewVisible] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [upiId, setUpiId] = useState('');
-  const [linkkId, setlinkId] = useState('');
+  const [linkId, setlinkId] = useState('');
   const [showUpiInput, setShowUpiInput] = useState(false);
 
   const [fontsLoaded] = useFonts({
@@ -43,13 +43,13 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
     'Montserrat-Medium': Montserrat_500Medium,
     'Montserrat-SemiBold': Montserrat_600SemiBold,
   });
-
+/*
   useEffect(() => {
     if (visible) {
-      fetchWalletBalance();
+      //fetchWalletBalance();
     }
   }, [visible]);
-
+*/
   const fetchWalletBalance = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -65,7 +65,7 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
       setWalletBalance(wallet?.balance || 0);
     } catch (error) {
       console.error('[Wallet Error]:', error);
-      setError('Failed to fetch wallet balance');
+      //setError('Failed to fetch wallet balance');
     }
   };
 
@@ -79,8 +79,25 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
     setError(null);
     setShowUpiInput(method === 'upi');
   };
-
-
+  const confirmPayment = async () => {
+    const baseUrl = 'http://206.189.140.183:3000/api/confirmorder'
+    const query = `link_id=${encodeURIComponent(linkId)}`;
+    const url = `${baseUrl}?${query}`;
+    console.log(url)
+    try {
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.status == "success"){
+        onPaymentComplete('upi', { upi_id: upiId });
+        onClose();
+      }
+      else{
+        Alert.alert('Payment failed');
+      }
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    }
+  }
   const handlePayment = async () => {
     try {
       setLoading(true);
@@ -100,6 +117,7 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
         }
         const amt  = amount.toFixed(2)
         console.log(amt)
+        /*
         if (amt == "500.00"){
             setPaymentUrl("https://payments-test.cashfree.com/links/G8rbb6e3gtv0");
             setWebviewVisible(true);
@@ -112,15 +130,15 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
           setPaymentUrl("https://payments-test.cashfree.com/links/I8rbbb0vnl2g");
           setWebviewVisible(true);
         }
-        /*
+        */
+        
         const value = await AsyncStorage.getItem("userdata");
         const value_json = JSON.parse(value)
         const phone = value_json.phone
-        const amt  = amount.toFixed(2)
         const linkId = Math.floor(Math.random() * 100000);
         const linkIdstr = linkId.toString()
         setlinkId(linkIdstr)
-        const baseUrl = 'http://10.191.135.43:3000/api/order';
+        const baseUrl = 'http://206.189.140.183:3000/api/order';
         const query = `link_id=${encodeURIComponent(linkId)}&link_amount=${amt}&customer_phone=${phone}`;
         const url = `${baseUrl}?${query}`;
         console.log(url)
@@ -130,6 +148,8 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
 
           console.log('Response:', data);
           const url1 = data.link_url
+          const link_id = data.link_id
+          setlinkId(link_id)
           if (url1) {
             setPaymentUrl(url1);
             setWebviewVisible(true);
@@ -139,7 +159,6 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
         } catch (error) {
           console.error('Error fetching data:', error);
         }
-        */
       }
 
       // Handle wallet/cash
@@ -175,14 +194,7 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
 
                 <Text style={styles.sectionTitle}>Payment Methods</Text>
 
-                <TouchableOpacity style={[styles.paymentMethod, selectedMethod === 'wallet' && styles.selectedMethod]} onPress={() => handleMethodSelect('wallet')}>
-                  <View style={styles.methodIcon}><Wallet size={24} color="#FFA500" /></View>
-                  <View style={styles.methodDetails}>
-                    <Text style={styles.methodTitle}>Wallet</Text>
-                    <Text style={styles.methodBalance}>Balance: ₹{walletBalance.toFixed(2)}</Text>
-                  </View>
-                  <ChevronRight size={20} color="#666" />
-                </TouchableOpacity>
+
 
                 <TouchableOpacity style={[styles.paymentMethod, selectedMethod === 'upi' && styles.selectedMethod]} onPress={() => handleMethodSelect('upi')}>
                   <View style={styles.methodIcon}><IndianRupee size={24} color="#FFA500" /></View>
@@ -207,14 +219,6 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
                   </View>
                 )}
 
-                <TouchableOpacity style={[styles.paymentMethod, selectedMethod === 'cash' && styles.selectedMethod]} onPress={() => handleMethodSelect('cash')}>
-                  <View style={styles.methodIcon}><CreditCard size={24} color="#FFA500" /></View>
-                  <View style={styles.methodDetails}>
-                    <Text style={styles.methodTitle}>Cash</Text>
-                    <Text style={styles.methodSubtitle}>Pay on delivery</Text>
-                  </View>
-                  <ChevronRight size={20} color="#666" />
-                </TouchableOpacity>
 
                 {error && <Text style={styles.errorText}>{error}</Text>}
               </ScrollView>
@@ -247,9 +251,10 @@ export default function PaymentModal({ visible, onClose, onPaymentComplete, amou
           alignItems: 'center'
         }}
         onPress={() => {
-          setWebviewVisible(false); // hide webview
-          onPaymentComplete('upi', { upi_id: upiId });
-          onClose();
+          //setWebviewVisible(false); // hide webview
+          //onPaymentComplete('upi', { upi_id: upiId });
+          //onClose();
+          confirmPayment();
         }}
       >
         <Text style={{ color: '#000', fontWeight: 'bold' }}>Payment Completed</Text>
